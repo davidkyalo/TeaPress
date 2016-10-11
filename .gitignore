@@ -1,0 +1,8 @@
+/vendor
+/.trash
+
+composer.lock
+
+.env
+*.log
+*.trash

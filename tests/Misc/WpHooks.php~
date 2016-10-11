@@ -1,0 +1,64 @@
+<?php
+
+namespace TeaPress\Tests\Misc;
+
+use PHPUnit_Framework_TestCase;
+
+class WpHooks extends PHPUnit_Framework_TestCase
+{
+	public function testChangesToValueOnWordpressFilter()
+	{
+		$value = 'before_filter';
+
+		add_filter('testChangesToValueOnWordpressFilter', function($value){
+			echo "\tFilter 1: {$value}\n";
+			return 'after_filter_1';
+		});
+
+		add_filter('testChangesToValueOnWordpressFilter', function($value){
+			echo "\tFilter 2: {$value}\n";
+			return 'after_filter_2';
+		});
+
+		add_filter('testChangesToValueOnWordpressFilter', function($value){
+			echo "\tFilter 3: {$value}\n";
+			return 'after_filter_3';
+		});
+
+		echo "\n";
+
+		$this->assertEquals('after_filter_3', apply_filters('testChangesToValueOnWordpressFilter', $value));
+	}
+
+	public function testWpActionsAndFiltersDiff(){
+		$value = 'before_filter';
+
+		add_filter('testWpActionsAndFiltersDiff', function($value){
+			echo "\tFilter 1: {$value}\n";
+			return 'after_filter_1';
+		});
+
+		add_action('testWpActionsAndFiltersDiff', function($value){
+			echo "\tAction 1: {$value}\n";
+			return 'after_action_1';
+		});
+
+		add_action('testWpActionsAndFiltersDiff', function($value){
+			echo "\tAction 2: {$value}\n";
+			return 'after_action_2';
+		}, 999);
+
+		echo "\n";
+
+		$this->assertEquals('after_action_2', apply_filters('testWpActionsAndFiltersDiff', $value));
+	}
+
+	public function testCeil(){
+		$real = 2/9;
+		$ans = ceil( $real );
+
+		echo "\n\t".__FUNCTION__."  Real: {$real}  Ceil: {$ans}\n";
+		$this->assertEquals( 1, $ans );
+	}
+
+}

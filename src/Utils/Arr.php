@@ -1,0 +1,349 @@
+<?php
+
+namespace TeaPress\Utils;
+
+use Illuminate\Support\Arr as BaseArr;
+
+class Arr extends BaseArr
+{
+
+	/**
+	 * Add an element to an array using the given notation if it doesn't exist.
+	 * Uses the "dot" notation by default.
+	 *
+	 * @param  array   $array
+	 * @param  string  $key
+	 * @param  mixed   $value
+	 * @param  string  $notation='.'
+	 * @return array
+	 */
+	public static function add($array, $key, $value, $notation = '.')
+	{
+		if (is_null(static::get($array, $key, null, $notation))) {
+			static::set($array, $key, $value, $notation);
+		}
+
+		return $array;
+	}
+
+	/**
+	 * Flatten a multi-dimensional associative array with dots or the given notation.
+	 * If assoc_only=true, none associative arrays will be treated as values and won't be flattened.
+	 *
+	 * @param  array    $array
+	 * @param  bool 	$assoc_only = true
+	 * @param  int 		$depth = 0
+	 * @param  string  	$notation='.'
+	 *
+	 * @return array
+	 */
+	public static function dot($array, $assoc_only = true, $depth = 0, $notation = '.', $prepend = '', $level = 0)
+	{
+		if($assoc_only && is_array($array) && !static::isAssoc($array))
+			return $array;
+
+		$results = [];
+
+		foreach ($array as $key => $value) {
+			if ( is_array($value) && (!$depth || $depth > $level)  && (!$assoc_only || static::isAssoc($value)) )
+				$results = array_merge(
+						$results,
+						static::dot($value, $assoc_only, $depth, $notation, $prepend.$key.$notation, $level+1)
+					);
+			else
+				$results[$prepend.$key] = $value;
+
+		}
+
+		return $results;
+	}
+
+	/**
+	 * Get an item from a multi dimentional array using the given notation and pass it through the value() function.
+	 * If the item is a closure, it's return value will be returned.
+	 * Uses the "dot" notation by default.
+	 *
+	 * @param  array   $array
+	 * @param  string  $key
+	 * @param  mixed   $default
+	 * @param  string  $notation='.'
+	 *
+	 * @return mixed
+	 */
+	public static function eval($array, $key=null, $default = null, $notation = '.')
+	{
+		return value(static::get($array, $key, $default, $notation));
+	}
+
+	/**
+	 * Return the first element in an array passing a given truth test. Or the
+	 *
+	 * @param  array  $array
+	 * @param  callable|null  $callback
+	 * @param  mixed  $default
+	 * @return mixed
+	 */
+	public static function first($array, callable $callback = null, $default = null)
+	{
+		if(is_null($callback))
+			return empty($array) ? value($default) : reset($array);
+
+		foreach ($array as $key => $value) {
+			if (call_user_func($callback, $key, $value)) {
+				return $value;
+			}
+		}
+
+		return value($default);
+	}
+
+	/**
+	 * Return the last element in an array passing a given truth test.
+	 *
+	 * @param  array  $array
+	 * @param  callable|null  $callback
+	 * @param  mixed  $default
+	 * @return mixed
+	 */
+	public static function last($array, callable $callback = null, $default = null)
+	{
+		if(is_null($callback))
+			return empty($array) ? value($default) : end($array);
+
+		return static::first(array_reverse($array), $callback, $default);
+	}
+
+
+	/**
+	 * Flatten a multi-dimensional array into a single level.
+	 *
+	 * @param  array  $array
+	 * @param  int 	  $depth = 0
+	 *
+	 * @return array
+	 */
+	public static function flatten($array, $depth = 0, $level = 0)
+	{
+		$results = [];
+
+		foreach ($array as $key => $value) {
+			if ( is_array($value) && (!$depth || $depth > $level))
+				$results = array_merge( $results, static::flatten($value, $depth, $level+1) );
+			else
+				$results[] = $value;
+
+		}
+		return $results;
+	}
+
+
+	/**
+	 * Remove one or many array items from a given array using using the given notation.
+	 * Uses the "dot" notation by default.
+	 *
+	 * @param  array  $array
+	 * @param  array|string  $keys
+	 * @param  string  $notation='.'
+	 * @return void
+	 */
+	public static function forget(&$array, $keys, $notation = '.')
+	{
+		$original = &$array;
+
+		$keys = (array) $keys;
+
+		if (count($keys) === 0) {
+			return;
+		}
+
+		foreach ($keys as $key) {
+			$parts = explode($notation, $key);
+
+			while (count($parts) > 1) {
+				$part = array_shift($parts);
+
+				if (isset($array[$part]) && is_array($array[$part])) {
+					$array = &$array[$part];
+				} else {
+					$parts = [];
+				}
+			}
+
+			unset($array[array_shift($parts)]);
+
+			// clean up after each pass
+			$array = &$original;
+		}
+	}
+
+	/**
+	 * Get an item from a multi dimentional array using the given notation.
+	 * Uses the "dot" notation by default.
+	 *
+	 * @param  array   $array
+	 * @param  string  $key
+	 * @param  mixed   $default
+	 * @param  string  $notation='.'
+	 * @return mixed
+	 */
+	public static function get($array, $key, $default = null, $notation = '.')
+	{
+		if (is_null($key))
+			return $array;
+
+		if (isset($array[$key]))
+			return $array[$key];
+
+		foreach (explode($notation, $key) as $segment) {
+			if (! is_array($array) || !array_key_exists($segment, $array))
+				return value($default);
+			$array = $array[$segment];
+		}
+
+		return $array;
+	}
+
+	/**
+	 * ALIAS of eval()
+	 * Get an item from a multi dimentional array using the given notation and pass it through the value() function.
+	 * If the item is a closure, it's return value will be returned.
+	 * Uses the "dot" notation by default.
+	 *
+	 * @param  array   $array
+	 * @param  string  $key
+	 * @param  mixed   $default
+	 * @param  string  $notation='.'
+	 *
+	 * @return mixed
+	 */
+	public static function getValue($array, $key, $default = null, $notation = '.')
+	{
+		return static::eval($array, $key, $default, $notation);
+	}
+
+	/**
+	 * Check if an item exists in an array using the given notation.
+	 * Uses the "dot" notation by default.
+	 *
+	 * @param  array   $array
+	 * @param  string  $key
+	 * @param  string  $notation='.'
+	 * @return bool
+	 */
+	public static function has($array, $key, $notation = '.')
+	{
+		if (empty($array) || is_null($key))
+			return false;
+
+		if (isset($array[$key]))
+			return true;
+
+		foreach (explode($notation, $key) as $segment) {
+			if (! is_array($array) || ! array_key_exists($segment, $array))
+				return false;
+
+			$array = $array[$segment];
+		}
+
+		return true;
+	}
+
+
+	/**
+	 * Get a value from the array using the given notation, and remove it.
+	 * Uses the "dot" notation by default.
+	 *
+	 * @param  array   $array
+	 * @param  string  $key
+	 * @param  mixed   $default
+	 * @param  string  $notation='.'
+	 * @return mixed
+	 */
+	public static function pull(&$array, $key, $default = null, $notation = '.')
+	{
+		$value = static::get($array, $key, $default, $notation);
+
+		static::forget($array, $key, $notation);
+
+		return $value;
+	}
+
+
+	/**
+	 * Appends a value to the nested $array[$key] array in the multi-dimensional $array.
+	 * If the target array is not set, an empty one is created.
+	 *
+	 * @param  array   $array 			The root array
+	 * @param  string  $key 			Key to the nested array in "dot" or given notation
+	 * @param  mixed   $value 			The value to append
+	 * @param  bool    $unique = false 	If true, the value will only be appended if it does not exist.
+	 * @param  string  $notation='.'
+	 *
+	 * @return array
+	 */
+	public static function push(&$array, $key, $value, $unique = false, $notation = '.'){
+		$values = static::get($array, $key, [], $notation);
+		if( !$unique ||  !in_array($value, $values) )
+			$values[] = $value;
+		return static::set($array, $key, $values, $notation);
+	}
+
+
+	/**
+	 * Appends an array of values to the nested $array[$key] array in the multi-dimensional $array.
+	 * If the target array is not set, an empty one is created.
+	 *
+	 * @param  array   $array 			The root array
+	 * @param  string  $key 			Key to the nested array in "dot" or given notation
+	 * @param  array   $values 			The values to append
+	 * @param  bool    $unique = false 	If true, the value will only be appended if it does not exist.
+	 * @param  string  $notation='.'
+	 *
+	 * @return array
+	 */
+	public static function pushAll(&$array, $key, $values, $unique = false, $notation = '.'){
+		foreach ( (array) $values as $value) {
+			static::push($array, $key, $value, $unique, $notation);
+		}
+		return $array;
+	}
+
+
+	/**
+	 * Set an array item to a given value using the given notation.
+	 * Uses the "dot" notation by default.
+	 * If no key is given to the method, the entire array will be replaced.
+	 *
+	 * @param  array   $array
+	 * @param  string  $key
+	 * @param  mixed   $value
+	 * @param  string  $notation='.'
+	 * @return array
+	 */
+	public static function set(&$array, $key, $value, $notation = '.')
+	{
+		if (is_null($key)) {
+			return $array = $value;
+		}
+
+		$keys = explode($notation, $key);
+
+		while (count($keys) > 1) {
+			$key = array_shift($keys);
+
+			// If the key doesn't exist at this depth, we will just create an empty array
+			// to hold the next value, allowing us to create the arrays to hold final
+			// values at the correct depth. Then we'll keep digging into the array.
+			if (! isset($array[$key]) || ! is_array($array[$key])) {
+				$array[$key] = [];
+			}
+
+			$array = &$array[$key];
+		}
+
+		$array[array_shift($keys)] = $value;
+
+		return $array;
+	}
+}
+

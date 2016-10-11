@@ -1,0 +1,50 @@
+{
+	"name": "teapress/framework",
+	"description": "Teapress Framework",
+	"version" : "0.1.0-dev",
+	"keywords": ["wordpress", "framework"],
+	 "repositories": [
+		{
+			"type": "vcs",
+			"url": "https://github.com/davidkyalo/wp-eloquent"
+		}
+	],
+	"require": {
+		"nesbot/carbon": "^1.21",
+		"tea/wp-eloquent": "dev-master",
+		"illuminate/container"	: "5.1.*",
+		"illuminate/session" : "5.1.*",
+		"illuminate/validation" : "5.1.*",
+		"illuminate/filesystem": "5.1.*",
+		"illuminate/http"	: "5.1.*",
+		"symfony/translation": "2.7.*",
+		"symfony/finder": "2.7.*"
+	},
+	"require-dev": {
+		"fzaninotto/faker": "^1.5",
+		"phpunit/phpunit": "~4.0",
+		"phpspec/phpspec": "~2.1"
+	},
+	"autoload": {
+		"classmap": [],
+		"files": [
+			"src/autoload.php"
+		],
+		"psr-4": {
+			"TeaPress\\" : "src/"
+		}
+	},
+
+	"scripts": {
+	},
+	"extra": {
+		"branch-alias": {
+			"dev-master": "0.1.0-dev"
+		}
+	},
+	"config": {
+		"preferred-install": "dist",
+		"optimize-autoloader": true
+	},
+	"minimum-stability": "stable"
+}
