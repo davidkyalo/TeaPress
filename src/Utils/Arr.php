@@ -76,7 +76,8 @@ class Arr extends BaseArr
 	}
 
 	/**
-	 * Return the first element in an array passing a given truth test. Or the
+	 * Return the first element in an array passing a given truth test.
+	 * If a callback is not given, the first element of the array is returned.
 	 *
 	 * @param  array  $array
 	 * @param  callable|null  $callback
@@ -99,6 +100,7 @@ class Arr extends BaseArr
 
 	/**
 	 * Return the last element in an array passing a given truth test.
+	 * If a callback is not given, the last element of the array is returned.
 	 *
 	 * @param  array  $array
 	 * @param  callable|null  $callback

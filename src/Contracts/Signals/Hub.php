@@ -185,6 +185,18 @@ interface Hub extends Dispatcher {
 	*/
 	public function bind($tag, $callback, $priority = null, $accepted_args = null, $once = null);
 
+	/**
+	* Bind an action callback.
+	*
+	* @param  array|string					$tag
+	* @param  \Closure|array|string 		$callback
+	* @param  int|null						$priority
+	* @param  int|null|bool					$accepted_args
+	* @param  bool							$once
+	*
+	* @return static
+	*/
+	public function bindWrapped($tag, $callback, $priority = null, $accepted_args = null, $once = null);
 
 	/**
 	* Bind a filter callback.
@@ -347,7 +359,7 @@ interface Hub extends Dispatcher {
 	*
 	* @return void
 	*/
-	public function emitSignal($tag, array $payload = [], $halt=false);
+	public function emitSignalWith($tag, array $payload = [], $halt=false);
 
 
 	/**
@@ -386,13 +398,25 @@ interface Hub extends Dispatcher {
 	* Calls the apply_filters_ref_array() wordpress function.
 	*
 	* @param  array|string					$tag
-	* @param  mixed|array					$item
-	* @param  array|null|bool				$payload
+	* @param  array 						$payload
 	*
 	* @return mixed
 	*/
-	public function mapItem($tag, $item =null, array $payload = []);
+	public function applyFiltersWith($tag, array $payload=[]);
 
+
+	/**
+	* Filter a item by executing callbacks hooked to the given filter hook.
+	*
+	* Equivalent to apply_filters() wordpress function.
+	*
+	* @param  array|string		$tag
+	* @param  mixed				$item
+	* @param  mixed				...$payload
+	*
+	* @return void
+	*/
+	public function filter($tag, $item=null, ...$payload);
 
 	/**
 	* Filter a value by executing callbacks hooked to the given filter hook.
@@ -400,23 +424,12 @@ interface Hub extends Dispatcher {
 	* Calls the apply_filters() wordpress function.
 	*
 	* @param  array|string		$tag
-	* @param  mixed				$value
+	* @param  mixed				$item
+	* @param  mixed				...$payload
 	*
 	* @return void
 	*/
-	public function map($tag, $value=null, ...$payload);
-
-	/**
-	* Filter a value by executing callbacks hooked to the given filter hook.
-	*
-	* Calls the apply_filters() wordpress function.
-	*
-	* @param  array|string		$tag
-	* @param  mixed				$value
-	*
-	* @return void
-	*/
-	public function applyFilters($tag, $value=null, ...$payload);
+	public function applyFilters($tag, $item=null, ...$payload);
 
 	/**
 	* get all the bound callbacks for the given hook

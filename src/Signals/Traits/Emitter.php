@@ -85,7 +85,7 @@ trait Emitter {
 	protected static function bindCallback($hook, $callback, $priority = null, $accepted_args = null, $once = null)
 	{
 		if($hub = static::getSignalsHub()){
-			$hub->bind( static::getHookTag($hook), $callback, $priority, $accepted_args, $once);
+			$hub->bind( static::getHookTag($hook), $callback, $priority, $accepted_args, $once, true);
 			return true;
 		}
 
@@ -149,9 +149,9 @@ trait Emitter {
 	* @param  array				$payload
 	* @param  bool				$halt
 	*
-	* @return void
+	* @return mixed
 	*/
-	protected function emitSignal($hook, array $payload = [], $halt = false)
+	protected function emitSignal($hook, ...$payload)
 	{
 		if( $hub = static::getSignalsHub())
 		{
@@ -160,7 +160,30 @@ trait Emitter {
 			if(!in_array($this, $payload))
 				$payload[] = $this;
 
-			$hub->emitSignal($tag, $payload, $halt );
+			return $hub->emitSignalWith($tag, $payload, false);
+		}
+	}
+
+
+	/**
+	* Execute callbacks hooked the specified action until the first non-null response is returned.
+	*
+	* @param  string			$hook
+	* @param  array				$payload
+	* @param  bool				$halt
+	*
+	* @return mixed
+	*/
+	protected function emitSignalUntil($hook, ...$payload)
+	{
+		if( $hub = static::getSignalsHub())
+		{
+			$tag = static::getHookTag($hook);
+
+			if(!in_array($this, $payload))
+				$payload[] = $this;
+
+			return $hub->emitSignalWith($tag, $payload, true);
 		}
 	}
 
@@ -179,16 +202,16 @@ trait Emitter {
 	*
 	* @return mixed
 	*/
-	protected function mapItem($tag, $item = null, array $payload = [])
+	protected function applyFilters($hook, $item = null, ...$payload)
 	{
 		if( $hub = static::getSignalsHub()){
 
-			$tag = static::getHookTag($tag);
+			$tag = static::getHookTag($hook);
 
 			if(!in_array($this, $payload))
 				$payload[] = $this;
 
-			return $hub->mapItem( $tag, $item, $payload);
+			return $hub->applyFilters( $tag, $item, ...$payload);
 		}
 
 		return $item;

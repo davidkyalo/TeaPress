@@ -3,7 +3,7 @@
 namespace TeaPress\Utils\Traits;
 
 use Closure;
-use TeaPress\Exceptions\BadMethodOrExtensionCall;
+use TeaPress\Contracts\Exceptions\BadMethodOrExtensionCall;
 
 trait Extendable {
 

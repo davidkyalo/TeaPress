@@ -4,8 +4,9 @@ namespace TeaPress\Core;
 
 use TeaPress\Utils\Arr;
 use BadMethodCallException;
-use TeaPress\Contracts\Core\ServiceProvider as ProviderContract;
 use TeaPress\Contracts\Core\Application as Contract;
+use TeaPress\Contracts\Core\Manifest as ManifestContract;
+use TeaPress\Contracts\Core\ServiceProvider as ProviderContract;
 
 class Application extends Container implements Contract
 {
@@ -17,37 +18,94 @@ class Application extends Container implements Contract
 	 */
 	protected static $instance;
 
-	protected static $instance;
+	// /**
+	//  * @var string
+	//  */
+	// protected $basePath;
 
-	protected $basePath;
+	// /**
+	//  * @var string
+	//  */
+	// protected $storagePath;
 
+	/**
+	 * @var bool
+	 */
 	protected $booted = false;
 
-	protected $manifest = [];
+	/**
+	 * @var \TeaPress\Core\Manifest
+	 */
+	protected $manifest;
 
+	/**
+	 * @var array
+	 */
 	protected $kernels = [];
 
+	/**
+	 * @var array
+	 */
 	protected $loadedKernels = [];
 
+	/**
+	 * @var array
+	 */
 	protected $serviceAliases = [];
 
+	/**
+	 * Creates the application instance.
+	 *
+	 * @param  array|string|\TeaPress\Contracts\Core\Manifest  $manifest
+	 *
+	 * @return static
+	 */
+	public static function create($mainfest)
+	{
+		if($instance = static::getInstance()){
+			throw new BadMethodCallException("Application instance already created.");
+		}
 
-	public function __construct($manifest)
+		return new static($manifest);
+	}
+
+	/**
+	 * Creates the application instance.
+	 *
+	 * @param  array|string|\TeaPress\Contracts\Core\Manifest  $manifest
+	 *
+	 * @return void
+	 */
+	protected function __construct($manifest)
 	{
 		static::setInstance($this);
 
-		$this->loadManifest($manifest);
-		$this->registerApplicationService();
-		$this->startCoreServices();
+		$this->setManifest( $this->loadManifest($manifest) );
 
-		$this->start($this->basePath.'/manifest.php');
+		$this->registerApplicationService();
+		$this->registerCoreServices();
 	}
 
-	protected function loadManifest($manifest = null)
-	{
-		if(is_null($manifest))
-			return;
+	// /**
+	// * Get the current application's base path.
+	// *
+	// * @return void
+	// */
+	// public function basePath($path = '')
+	// {
+	// 	return join_paths($this->basePath, $path);
+	// }
 
+	/**
+	 * Sets the manifest for the current application.
+	 *
+	 * @param  \TeaPress\Contracts\Core\Manifest   $manifest
+	 *
+	 * @return static
+	 */
+	public function setManifest(ManifestContract $manifest)
+	{
+		$this->manifest = $manifest;
 		if(is_string($manifest))
 			$manifest = @require($manifest);
 
@@ -55,7 +113,40 @@ class Application extends Container implements Contract
 
 		$this->basePath = $this->manifest('base_path');
 
+		return $this;
 	}
+
+
+	/**
+	 * Loads the manifest for the current application.
+	 *
+	 * @param  array|string|\TeaPress\Contracts\Core\Manifest  $manifest
+	 *
+	 * @return void
+	 */
+	public function loadManifest($manifest)
+	{
+		if(!($manifest instanceof ManifestContract)){
+			$manifest = $this->createManifest()->compiles(... (array) $manifest );
+		}
+
+		$manifest->setApplication($this);
+
+		return $manifest;
+	}
+
+	/**
+	 * Loads the manifest for the current application.
+	 *
+	 * @param  array $manifest
+	 *
+	 * @return \TeaPress\Contracts\Core\Manifest
+	 */
+	public function createManifest(array $attributes = [])
+	{
+		return new Manifest($attributes);
+	}
+
 
 	/**
 	* Get the specified item from the manifest.
@@ -64,7 +155,7 @@ class Application extends Container implements Contract
 	*/
 	public function manifest($key=null, $default = null)
 	{
-		return Arr::get($this->manifest, $key, $default);
+		return is_null($key) ? $this->manifest : $this->manifest->get($key, $default);
 	}
 
 	/**
@@ -96,16 +187,14 @@ class Application extends Container implements Contract
 		}
 	}
 
-	public function start($manifest = null)
+	public function start()
 	{
-		if ($this->started) return;
+		if (!$this->started){
+			$this->registerKernels( (array) $this->manifest('kernels', []) );
+			$this->started = true;
 
-
-		$this->loadManifest($manifest);
-		$this->registerKernels( (array) $this->manifest('kernels', []) );
-
-		$this->started = true;
-
+		}
+		return $this;
 	}
 
 	public function registerKernels(array $kernels, $force = false)

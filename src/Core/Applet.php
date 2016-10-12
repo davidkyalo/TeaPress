@@ -4,12 +4,15 @@ namespace TeaPress\Core;
 use Closure;
 use ArrayAccess;
 use TeaPress\Contracts\Core\Container;
-use TeaPress\Contracts\Core\ProxyContainer as Contract;
+use TeaPress\Contracts\Core\Applet as Contract;
 
 
-abstract class ProxyContainer implements Contract, ArrayAccess
+class Applet implements Contract, ArrayAccess
 {
 	protected $container;
+
+	protected $name;
+
 
 	public function setContainer(Container $container)
 	{

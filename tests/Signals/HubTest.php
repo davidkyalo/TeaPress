@@ -93,8 +93,6 @@ class HubTest extends ServiceTestCase
 			return 3;
 		});
 
-		apply_filters('some_filter', 0);
-
 		$this->assertEquals(2, apply_filters('some_filter', 0));
 	}
 
@@ -126,7 +124,7 @@ class HubTest extends ServiceTestCase
 	}
 
 
-	public function testEmitSignal()
+	public function testEmitSignalWith()
 	{
 		$tag = $this->methodTag(__METHOD__);
 
@@ -136,7 +134,7 @@ class HubTest extends ServiceTestCase
 			$this->assertEquals($args, func_get_args());
 		});
 
-		$this->signals->emitSignal($tag, $args);
+		$this->signals->emitSignalWith($tag, $args);
 	}
 
 	public function testApplyFilters()
@@ -156,7 +154,7 @@ class HubTest extends ServiceTestCase
 		$this->assertEquals(2, $this->signals->applyFilters( $tag, 0, 1) );
 	}
 
-	public function testMap()
+	public function testFilter()
 	{
 		$tag = $this->methodTag(__METHOD__);
 
@@ -170,10 +168,10 @@ class HubTest extends ServiceTestCase
 			return $value + $adds;
 		});
 
-		$this->assertEquals(2, $this->signals->map( $tag, 0, 1) );
+		$this->assertEquals(2, $this->signals->filter( $tag, 0, 1) );
 	}
 
-	public function testMapItem()
+	public function testApplyFiltersWith()
 	{
 		$tag = $this->methodTag(__METHOD__);
 
@@ -185,7 +183,7 @@ class HubTest extends ServiceTestCase
 			return $value * $mult;
 		});
 
-		$this->assertEquals(4, $this->signals->mapItem( $tag, 1, [2]) );
+		$this->assertEquals(4, $this->signals->applyFiltersWith( $tag, [1,2]) );
 	}
 
 	public function testClassBasedCallback()
@@ -193,7 +191,7 @@ class HubTest extends ServiceTestCase
 		$tag = $this->methodTag(__METHOD__);
 
 		$this->signals->bind( $tag, Handler::class.'@increment');
-		$response = $this->signals->map( $tag, 0, 2);
+		$response = $this->signals->filter( $tag, 0, 2);
 		$this->assertEquals(2, $response );
 	}
 
@@ -203,7 +201,7 @@ class HubTest extends ServiceTestCase
 
 		$this->signals->bind( $tag, Handler::class);
 
-		$this->assertEquals(6, $this->signals->map( $tag, 3, 'multiply', 2) );
+		$this->assertEquals(6, $this->signals->filter( $tag, 3, 'multiply', 2) );
 	}
 
 
@@ -215,7 +213,7 @@ class HubTest extends ServiceTestCase
 			return $this->signals->isDoing($tag);
 		});
 
-		$this->assertTrue($this->signals->map($tag));
+		$this->assertTrue($this->signals->filter($tag));
 	}
 
 
@@ -227,7 +225,7 @@ class HubTest extends ServiceTestCase
 			return $this->signals->current();
 		});
 
-		$this->assertEquals($tag, $this->signals->map($tag));
+		$this->assertEquals($tag, $this->signals->filter($tag));
 	}
 
 	public function testOnce()
@@ -238,8 +236,8 @@ class HubTest extends ServiceTestCase
 			return $value+1;
 		});
 
-		$value_1 = $this->signals->map( $tag, 1);
-		$value_2 = $this->signals->map( $tag, $value_1);
+		$value_1 = $this->signals->filter( $tag, 1);
+		$value_2 = $this->signals->filter( $tag, $value_1);
 
 		$this->assertEquals($value_1, $value_2);
 	}

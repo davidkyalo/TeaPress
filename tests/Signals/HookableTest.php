@@ -52,17 +52,17 @@ class HookableTest extends TestCase
 		$hookable->start();
 	}
 
-	public function testMappers()
+	public function testFilters()
 	{
 		$hookable = $this->getHookable();
 
 		$response = __METHOD__;
 
-		Hookable::on('mappers', function($arg) use($response){
+		Hookable::on('filters', function($arg) use($response){
 			return $response;
 		});
 
-		$this->assertEquals($response, $hookable->runMappers());
+		$this->assertEquals($response, $hookable->runFilters());
 	}
 
 }

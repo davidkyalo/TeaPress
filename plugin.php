@@ -10,7 +10,3 @@
 */
 
 require_once __DIR__.'/vendor/autoload.php';
-
-if(defined('DOING_UNIT_TESTS') && DOING_UNIT_TESTS){
-	require_once DOING_UNIT_TESTS .'/init.php';
-}

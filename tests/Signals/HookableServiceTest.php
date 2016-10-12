@@ -56,17 +56,17 @@ class HookableServiceTest extends ServiceTestCase
 		$hookable->start();
 	}
 
-	public function testMappers()
+	public function testFilters()
 	{
 		$hookable = $this->hookable;
 
 		$response = __METHOD__;
 
-		HookableService::on('mappers', function($arg) use($response){
+		HookableService::on('filters', function($arg) use($response){
 			return $response;
 		});
 
-		$this->assertEquals($response, $hookable->runMappers());
+		$this->assertEquals($response, $hookable->runFilters());
 	}
 
 

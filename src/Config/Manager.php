@@ -8,6 +8,7 @@ use InvalidArgumentException;
 use TeaPress\Contracts\Utils\Arrayable;
 use TeaPress\Contracts\Utils\ArrayBehavior;
 use Illuminate\Support\NamespacedItemResolver;
+use TeaPress\Contracts\Signals\Hub as Signals;
 use TeaPress\Contracts\Config\Manager as Contract;
 use TeaPress\Contracts\Config\Repository as RepositoryContract;
 
@@ -20,6 +21,13 @@ class Manager extends NamespacedItemResolver implements Contract, ArrayBehavior,
 	 * @var \TeaPress\Config\LoaderInterface
 	 */
 	protected $loader;
+
+	/**
+	 * The Signals Hub
+	 *
+	 * @var \TeaPress\Contracts\Signals\Hub
+	 */
+	protected $signals;
 
 	/**
 	 * All of the configuration items.
@@ -49,9 +57,10 @@ class Manager extends NamespacedItemResolver implements Contract, ArrayBehavior,
 	 * @param  string|array|null  $paths
 	 * @return void
 	 */
-	public function __construct(LoaderInterface $loader, $paths = null)
+	public function __construct(LoaderInterface $loader, Signals $signals, $paths = null)
 	{
 		$this->loader = $loader;
+		$this->signals = $signals;
 		$this->addPath($paths);
 	}
 
@@ -138,6 +147,24 @@ class Manager extends NamespacedItemResolver implements Contract, ArrayBehavior,
 	}
 
 	/**
+	* Bind a config value filter. The provided callback will be executed every time the an attempt to get the value is made.
+	*
+	* @param  string  $key
+	* @param  \Closure|array|string  $callback
+	* @param  int|null  $priority
+	*
+	* @return bool
+	*/
+	public function filter($key, $callback, $priority = null)
+	{
+		list($namespace, $item) = $this->parseKey($key);
+
+		$repository = $this->getOrCreateRepository($namespace);
+
+		return $repository->filter($item, $callback, $priority);
+	}
+
+	/**
 	 * Get all of the configuration items for the application.
 	 *
 	 * @return array
@@ -150,12 +177,12 @@ class Manager extends NamespacedItemResolver implements Contract, ArrayBehavior,
 	/**
 	 * Get the repository instance for the given namespace
 	 *
-	 * @param  string  $namespace
+	 * @param  string|null  $namespace
 	 * @param  bool  $or_create_empty
 	 *
 	 * @return \TeaPress\Config\Repository|null
 	 */
-	public function repository($namespace = '*')
+	public function repository($namespace = null)
 	{
 		return $this->getRepository($namespace);
 	}
@@ -163,15 +190,14 @@ class Manager extends NamespacedItemResolver implements Contract, ArrayBehavior,
 	/**
 	 * Get the repository instance for the given namespace
 	 *
-	 * @param  string  $namespace
+	 * @param  string|null  $namespace
 	 * @param  bool  $or_create_empty
 	 *
 	 * @return \TeaPress\Config\Repository|null
 	 */
-	public function getRepository($namespace = '*', $or_create_empty = false)
+	public function getRepository($namespace = null, $or_create_empty = false)
 	{
-		if(is_null($namespace))
-			$namespace = '*';
+		$namespace = $this->getNamespace($namespace);
 
 		if( $this->isLoaded($namespace) ){
 			return $this->repositories[$namespace];
@@ -186,12 +212,12 @@ class Manager extends NamespacedItemResolver implements Contract, ArrayBehavior,
 	/**
 	 * Get the repository instance for the given namespace
 	 *
-	 * @param  string  $namespace
+	 * @param  string|null  $namespace
 	 * @param  bool  $create
 	 *
 	 * @return \TeaPress\Config\Repository
 	 */
-	public function getOrCreateRepository($namespace = '*')
+	public function getOrCreateRepository($namespace = null)
 	{
 		return $this->getRepository($namespace, true);
 	}
@@ -231,6 +257,8 @@ class Manager extends NamespacedItemResolver implements Contract, ArrayBehavior,
 			$repository = $this->repositories[$namespace] = $this->newRepository($config, $namespace);
 		}
 
+		$repository->setSignals($this->signals);
+
 		return $repository;
 	}
 
@@ -246,7 +274,7 @@ class Manager extends NamespacedItemResolver implements Contract, ArrayBehavior,
 		if(is_string($repository))
 			return [ null, $repository ];
 		else
-			return [ $repository, $repository->getNamespace];
+			return [ $repository, $repository->getNamespace()];
 	}
 
 

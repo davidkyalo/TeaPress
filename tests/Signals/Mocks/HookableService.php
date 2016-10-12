@@ -28,13 +28,13 @@ class HookableService implements Contract
 		$this->emitSignal('starting');
 	}
 
-	public function runMappers()
+	public function runFilters()
 	{
-		return $this->mapItem('mappers', null);
+		return $this->applyFilters('filters', 300);
 	}
 
 	public function checkTag()
 	{
-		return $this->mapItem('check_tag');
+		return $this->applyFilters('check_tag');
 	}
 }

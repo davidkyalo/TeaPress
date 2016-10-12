@@ -1,6 +1,8 @@
 <?php
 namespace TeaPress\Contracts\Config;
 
+use TeaPress\Contracts\Signals\Hub;
+
 interface Repository
 {
 	/**
@@ -71,4 +73,39 @@ interface Repository
 	 * @return void
 	 */
 	public function merge($items);
+
+
+	/**
+	 * Set the namespace for this repository
+	 *
+	 * @param  string  $namespace
+	 *
+	 * @return void
+	 */
+	public function setNamespace($namespace);
+
+
+	/**
+	 * Get the namespace for this repository
+	 *
+	 * @return string
+	 */
+	public function getNamespace();
+
+	/**
+	 * Get the signals hub instance.
+	 *
+	 * @return \TeaPress\Contracts\Signals\Hub
+	 */
+	public function getSignals();
+
+
+	/**
+	 * Set the signals hub instance.
+	 *
+	 * @param  \TeaPress\Contracts\Signals\Hub  $key
+	 *
+	 * @return void
+	 */
+	public function setSignals(Hub $signals);
 }

@@ -1,5 +1,5 @@
 <?php
-namespace TeaPress\Exceptions;
+namespace TeaPress\Contracts\Exceptions;
 
 use BadMethodCallException;
 

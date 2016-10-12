@@ -30,8 +30,8 @@ class Hookable implements Contract
 		$this->emitSignal('starting');
 	}
 
-	public function runMappers()
+	public function runFilters()
 	{
-		return $this->mapItem('mappers', null);
+		return $this->applyFilters('filters', null);
 	}
 }

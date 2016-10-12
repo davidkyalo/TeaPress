@@ -3,6 +3,7 @@ namespace TeaPress\Core;
 
 use Closure;
 use TeaPress\Contracts\Core\Container;
+use TeaPress\Contracts\Signals\Hub as Signals;
 
 abstract class Kernel
 {
@@ -12,17 +13,24 @@ abstract class Kernel
 	 */
 	protected $app;
 
+	/**
+	 * @var \TeaPress\Contracts\Signals\Hub
+	 */
+	protected $signals;
 
-	protected $run_priority = 10;
 
 	/**
-	 * Called to register the services this kernel provides.
+	 * Creates the kernel instance.
+	 *
+	 * @param \TeaPress\Contracts\Core\Container $app
+	 * @param \TeaPress\Contracts\Signals\Hub $signals
 	 *
 	 * @return void
 	 */
-	public function __construct(Container $app)
+	public function __construct(Container $app, Signals $signals = null)
 	{
 		$this->app = $app;
+		$this->signals = $signals;
 	}
 
 	/**
@@ -30,7 +38,10 @@ abstract class Kernel
 	 *
 	 * @return void
 	 */
-	abstract public function register();
+	public function register()
+	{
+
+	}
 
 	/**
 	 * Boot/Initialize the kernel. Called immediately after all kernels have been registered.

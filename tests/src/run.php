@@ -44,7 +44,7 @@ if(!function_exists('pprint')){
 
 echo "\n";
 
-$app = new Container(__DIR__);
+$app = new Container( dirname(__DIR__) );
 
 function testapp($service = null, $parameters = null)
 {

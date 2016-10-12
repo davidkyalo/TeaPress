@@ -34,6 +34,11 @@
 			"TeaPress\\" : "src/"
 		}
 	},
+	"autoload-dev": {
+		"files": [
+			"tests/autoload.php"
+		]
+	},
 
 	"scripts": {
 	},

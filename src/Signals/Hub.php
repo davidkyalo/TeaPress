@@ -338,7 +338,7 @@ class Hub implements Contract {
 	*
 	* @return static
 	*/
-	public function bind($tag, $callback, $priority = null, $accepted_args = null, $once = null, $wrap = false)
+	public function bind($tag, $callback, $priority = null, $accepted_args = null, $once = null, $naked = false)
 	{
 		if( is_bool($accepted_args) && is_null($once) ){
 			$once = $accepted_args;
@@ -355,15 +355,34 @@ class Hub implements Contract {
 			throw new BadMethodCallException("Bind once constraint broken. Can't rebind '{$callback}' to '{$tag}'.");
 
 
-		$bindable = $wrap || $once || !$this->isBindable($callback)
-					? $this->getOrCreateWrapper($callback, $priority) : $callback;
+		$bindable = $naked ? $callback : $this->getOrCreateWrapper($callback, $priority);
+
+		// $bindable = $wrap || $once || !$this->isBindable($callback)
+		// 			? $this->getOrCreateWrapper($callback, $priority) : $callback;
 
 		add_filter( $tag, $bindable, $priority, $accepted_args );
 
 		$this->bumpBindingsCount($callback, $tag, $once);
 
-		return $this;
+		return $this->getCallbackId($callback);
 	}
+
+	/**
+	* Bind an action callback.
+	*Naked
+	* @param  array|string					$tag
+	* @param  \Closure|array|string 		$callback
+	* @param  int|null						$priority
+	* @param  int|null|bool					$accepted_args
+	* @param  bool							$once
+	*
+	* @return static
+	*/
+	public function bindNaked($tag, $callback, $priority = null, $accepted_args = null)
+	{
+		return $this->bind($tag, $callback, $priority, $accepted_args, null, false);
+	}
+
 
 	/**
 	* Bind an action callback.
@@ -592,7 +611,7 @@ class Hub implements Contract {
 	*
 	* @return void
 	*/
-	public function emitSignal($tag, array $payload = [], $halt = false)
+	public function emitSignalWith($tag, array $payload = [], $halt = false)
 	{
 		$tag = $this->getTag($tag);
 
@@ -606,9 +625,19 @@ class Hub implements Contract {
 	}
 
 
+	/**
+	* Execute callbacks hooked the specified action.
+	*
+	* Equivalent to do_action() wordpress function.
+	*
+	* @param  array|string		$tag
+	* @param  mixed				$payload
+	*
+	* @return void
+	*/
 	public function emit($tag, ...$payload)
 	{
-		return $this->emitSignal($tag, $payload, false);
+		return $this->emitSignalWith($tag, $payload, false);
 	}
 
 	/**
@@ -623,19 +652,7 @@ class Hub implements Contract {
 	*/
 	public function doAction($tag, ...$payload)
 	{
-		return $this->emitSignal($tag, $payload, false);
-
-		// $args = func_get_args();
-
-		// $args[0] = $tag = $this->getTag( $args[0] );
-
-		// if(!$this->beforeDoAction($tag, array_slice($args, 1) , false)){
-		// 	return;
-		// }
-
-		// call_user_func_array('do_action', $args);
-
-		// return $this->afterDoAction($tag);
+		return $this->emitSignalWith($tag, $payload, false);
 	}
 
 
@@ -648,27 +665,38 @@ class Hub implements Contract {
 	* Calls the apply_filters_ref_array() wordpress function.
 	*
 	* @param  array|string					$tag
-	* @param  mixed|array					$value
-	* @param  array|null|bool				$payload
+	* @param  array 						$payload
 	*
 	* @return mixed
 	*/
-	public function mapItem($tag, $item =null, array $payload = [])
+	public function applyFiltersWith($tag, array $payload=[])
 	{
 		$tag = $this->getTag($tag);
 
-		if(!$this->beforeApplyFilters($tag, $item, $payload)){
-			return $item;
+		if(!$this->beforeApplyFilters($tag, $payload)){
+			return Arr::first($payload);
 		}
 
-		array_unshift($payload, $item);
+		$response = apply_filters_ref_array($tag, $payload);
 
-		return $this->afterApplyFilters($tag, apply_filters_ref_array($tag, $payload));
+		return $this->afterApplyFilters($tag, $response);
 	}
 
-	public function map($tag, $item=null, ...$payload)
+	/**
+	* Filter a item by executing callbacks hooked to the given filter hook.
+	*
+	* Equivalent to apply_filters() wordpress function.
+	*
+	* @param  array|string		$tag
+	* @param  mixed				$item
+	* @param  mixed				$payload
+	*
+	* @return void
+	*/
+	public function filter($tag, $item=null, ...$payload)
 	{
-		return $this->mapItem($tag, $item, $payload);
+		array_unshift($payload, $item);
+		return $this->applyFiltersWith($tag, $payload);
 	}
 
 
@@ -679,23 +707,14 @@ class Hub implements Contract {
 	*
 	* @param  array|string		$tag
 	* @param  mixed				$item
+	* @param  mixed				$payload
 	*
 	* @return void
 	*/
 	public function applyFilters($tag, $item=null, ...$payload)
 	{
-		return $this->mapItem($tag, $item, $payload);
-
-		// $args[0] = $tag = $this->getTag( $args[0] );
-
-		// if( count($args) === 1 )
-		// 	$args[] = null;
-
-
-		// if(!$this->beforeApplyFilters($tag, array_slice($args, 1), false ))
-		// 	return $args[1];
-
-		// return $this->afterApplyFilters($tag, call_user_func_array('apply_filters', $args));
+		array_unshift($payload, $item);
+		return $this->applyFiltersWith($tag, $payload);
 	}
 
 
@@ -771,7 +790,9 @@ class Hub implements Contract {
 	 */
 	public function push($event, $payload = [])
 	{
-		$this->listen($event.'_pushed', function () use ($event, $payload) {
+		$event = $this->getTag($event);
+		$this->listen($event.'_pushed', function () use ($event, $payload)
+		{
 			$this->fire($event, $payload);
 		});
 	}
@@ -809,6 +830,7 @@ class Hub implements Contract {
 	 */
 	public function flush($event)
 	{
+		$event = $this->getTag($event);
 		$this->fire($event.'_pushed');
 	}
 
@@ -822,7 +844,7 @@ class Hub implements Contract {
 	 */
 	public function fire($event, $payload = [], $halt = false)
 	{
-		return $this->emitSignal($event, (array) $payload, $halt);
+		return $this->emitSignalWith($event, (array) $payload, $halt);
 	}
 
 	/**
@@ -905,10 +927,10 @@ class Hub implements Contract {
 		return true;
 	}
 
-	protected function beforeApplyFilters($tag, $item, $payload = false)
+	protected function beforeApplyFilters($tag, array $payload)
 	{
 		$this->unbindFlushedCallbacks($tag);
-		$this->prepareSignal($tag, $item, false);
+		$this->prepareSignal($tag, Arr::first($payload), false);
 		return true;
 	}
 
@@ -923,7 +945,6 @@ class Hub implements Contract {
 		$this->unbindFlushedCallbacks($tag);
 		return $this->terminateSignal($tag, $response);
 	}
-
 
 	protected function prepareSignal($tag, $item = null, $halt = false)
 	{
@@ -944,6 +965,12 @@ class Hub implements Contract {
 		unset($this->halting[$tag]);
 
 		return $response;
+	}
+
+	protected function currentSignal()
+	{
+		$signal = $this->current();
+		return [ $signal, ( $signal && isset($this->responses[$signal]) ) ];
 	}
 
 
@@ -1203,6 +1230,7 @@ class Hub implements Contract {
 		};
 	}
 
+
 	/**
 	 * Wrap a hook's callback with a closure to ensure it's executed correctly.
 	 *
@@ -1214,15 +1242,19 @@ class Hub implements Contract {
 	{
 		return function () use ($callback, $priority)
 		{
-			$tag = $this->current();
+			list($signal, $emitting) = $this->currentSignal();
 
-			$response = Arr::last($this->responses[$tag]);
-			if( !$this->halting[$tag] || is_null($response) ){
-				$this->responses[$tag][] = $response = call_user_func_array( $this->getCallable($callback), func_get_args() );
+			$response = $emitting ? Arr::last($this->responses[$signal]) : null;
+
+			if($emitting && (!$this->halting[$signal] || is_null($response)) ){
+				$this->responses[$signal][] = $response = call_user_func_array( $this->getCallable($callback), func_get_args() );
+			}
+			elseif (!$emitting) {
+				$response = call_user_func_array( $this->getCallable($callback), func_get_args() );
 			}
 
-			if( $this->boundOnce( $callback, $tag ) )
-				$this->flushCallback($tag, $callback, $priority);
+			if( $this->boundOnce( $callback, $signal ) )
+				$this->flushCallback($signal, $callback, $priority);
 
 			return $response;
 		};
@@ -1232,10 +1264,10 @@ class Hub implements Contract {
 	 * Creates the class based callable for callback if callback is not callable, Returns callback if callable.
 	 *
 	 * @param  callable|string  $callback
-	 *
+	 *`
 	 * @return callable
 	 */
-	protected function getCallable($callback)
+	public function getCallable($callback)
 	{
 		if(is_callable($callback))
 			return $callback;

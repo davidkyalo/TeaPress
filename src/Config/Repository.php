@@ -6,10 +6,17 @@ use ArrayIterator;
 use TeaPress\Utils\Arr;
 use TeaPress\Contracts\Utils\Arrayable;
 use TeaPress\Contracts\Utils\ArrayBehavior;
+use TeaPress\Contracts\Signals\Hub as Signals;
 use TeaPress\Contracts\Config\Repository as Contract;
 
 class Repository implements Contract, ArrayBehavior, Arrayable
 {
+	/**
+	 * The Signals Hub
+	 *
+	 * @var \TeaPress\Contracts\Signals\Hub
+	 */
+	protected $signals;
 
 	/**
 	 * The namespace for this repository.
@@ -26,6 +33,13 @@ class Repository implements Contract, ArrayBehavior, Arrayable
 	protected $items = [];
 
 	/**
+	 * All of the configuration items.
+	 *
+	 * @var array
+	 */
+	protected $filters = [];
+
+	/**
 	 * Create a new configuration repository.
 	 *
 	 * @param  string  $namespace
@@ -38,50 +52,60 @@ class Repository implements Contract, ArrayBehavior, Arrayable
 		$this->namespace = $namespace;
 	}
 
-	/**
-	 * Get the namespace for this repository
-	 *
-	 * @return string
-	 */
-	public function getNamespace()
-	{
-		return $this->namespace;
-	}
-
 
 	/**
-	 * Set the namespace for this repository
-	 *
-	 * @param  string  $key
-	 *
-	 * @return string
-	 */
-	public function setNamespace($namespace)
+	* Bind a config value filter. The provided callback will be executed every time the an attempt to get the value is made.
+	*
+	* @param  string  $key
+	* @param  \Closure|array|string  $callback
+	* @param  int|null  $priority
+	*
+	* @return bool
+	*/
+	public function filter($key, $callback, $priority = null)
 	{
-		$this->namespace = $namespace;
+
 	}
 
+	/**
+	* Determine if the given key has filters. If a key is not specified, returns an array of filtered keys
+	*
+	* @param  string|null  $key
+	*
+	* @return bool|array
+	*/
+	public function filtered($key=null)
+	{
+		if(is_null($key))
+			return $this->filtered;
 
+		return
+		if( $this->signals ){
+
+		}
+	}
 
 	/**
 	 * Determine if the given configuration value exists.
 	 *
 	 * @param  string  $key
+	 * @param  bool  $filter whether or not to apply filters.
 	 * @return bool
 	 */
-	public function has($key)
+	public function has($key, $filter=true)
 	{
-		return Arr::has($this->items, $key);
+		return $this->get($key, NOTHING, $filter) !== NOTHING;
 	}
 
 	/**
 	 * Get the specified configuration value.
 	 *
-	 * @param  string  $key
-	 * @param  mixed   $default
+	 * @param  string 	$key
+	 * @param  mixed 	$default
+	 * @param  bool 	$filter 	whether or not to apply filters.
 	 * @return mixed
 	 */
-	public function get($key, $default = null)
+	public function get($key, $default = null, $filter=true)
 	{
 		return Arr::get($this->items, $key, $default);
 	}
@@ -139,9 +163,11 @@ class Repository implements Contract, ArrayBehavior, Arrayable
 	/**
 	 * Get all of the configuration items for the application.
 	 *
+	 * @param  bool 	$filter 	whether or not to apply filters.
+	 *
 	 * @return array
 	 */
-	public function getItems()
+	public function getItems($filter=false)
 	{
 		return $this->items;
 	}
@@ -149,11 +175,13 @@ class Repository implements Contract, ArrayBehavior, Arrayable
 	/**
 	 * Get all of the configuration items for the application.
 	 *
+	 * @param  bool 	$filter 	whether or not to apply filters.
+	 *
 	 * @return array
 	 */
-	public function all()
+	public function all($filter=true)
 	{
-		return $this->items;
+		return $this->getItems($filter);
 	}
 
 	/**
@@ -166,13 +194,64 @@ class Repository implements Contract, ArrayBehavior, Arrayable
 	 */
 	public function merge($items, $recursive = true)
 	{
-		if($items instanceof Contract)
+		if($items instanceof Contract){
 			$items = $items->getItems();
+
+		}
 
 		if($recursive)
 			$this->set( Arr::dot( (array) $items ) );
 		else
 			$this->items = array_merge($this->items, (array) $items);
+	}
+
+
+	/**
+	 * Get the namespace for this repository
+	 *
+	 * @return string
+	 */
+	public function getNamespace()
+	{
+		return $this->namespace;
+	}
+
+
+	/**
+	 * Set the namespace for this repository
+	 *
+	 * @param  string  $namespace
+	 *
+	 * @return void
+	 */
+	public function setNamespace($namespace)
+	{
+		$this->namespace = $namespace;
+	}
+
+
+
+	/**
+	 * Get the signals hub instance.
+	 *
+	 * @return \TeaPress\Contracts\Signals\Hub
+	 */
+	public function getSignals()
+	{
+		return $this->signals;
+	}
+
+
+	/**
+	 * Set the signals hub instance.
+	 *
+	 * @param  \TeaPress\Contracts\Signals\Hub  $key
+	 *
+	 * @return void
+	 */
+	public function setSignals(Signals $signals)
+	{
+		$this->signals = $signals;
 	}
 
 
@@ -193,13 +272,13 @@ class Repository implements Contract, ArrayBehavior, Arrayable
 	 */
 	public function toArray()
 	{
-		return $this->items;
+		return $this->getItems(true);
 	}
 
 
 	public function getIterator()
 	{
-		return new ArrayIterator($this->toArray());
+		return new ArrayIterator($this->getItems(true));
 	}
 
 	/**
@@ -210,7 +289,7 @@ class Repository implements Contract, ArrayBehavior, Arrayable
 	 */
 	public function offsetExists($key)
 	{
-		return $this->has($key);
+		return $this->has($key, false);
 	}
 
 	/**
