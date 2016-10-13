@@ -2,6 +2,27 @@
 
 use TeaPress\Tests\Container;
 
+
+$GLOBALS['executions'] = $GLOBALS['wp_actions'];
+
+add_action('all', function($tag){
+	global $executions, $wp_actions;
+
+	if(isset($wp_actions[$tag])){
+		$executions[$tag] = $wp_actions[$tag];
+	}
+	else
+	{
+		if(!isset($executions[$tag]))
+			$executions[$tag] = 1;
+		else
+			++$executions[$tag];
+	}
+
+});
+
+
+
 if(!function_exists('dump')){
 	function dump()
 	{
@@ -23,7 +44,7 @@ if(!function_exists('dump')){
 }
 
 if(!function_exists('pprint')){
-	function pprint($k, $v = NOTHING, $l=15)
+	function pprint($k, $v = NOTHING, $l=5)
 	{
 		static $started=false;
 
@@ -36,7 +57,8 @@ if(!function_exists('pprint')){
 		echo "{$k}{$pad} ";
 		if($v !== NOTHING){
 			echo ": ";
-			var_dump($v);
+			var_export($v);
+			// var_dump($v);
 		}
 		echo "\n";
 	}

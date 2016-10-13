@@ -192,11 +192,10 @@ interface Hub extends Dispatcher {
 	* @param  \Closure|array|string 		$callback
 	* @param  int|null						$priority
 	* @param  int|null|bool					$accepted_args
-	* @param  bool							$once
 	*
 	* @return static
 	*/
-	public function bindWrapped($tag, $callback, $priority = null, $accepted_args = null, $once = null);
+	public function bindWeak($tag, $callback, $priority = null, $accepted_args = null);
 
 	/**
 	* Bind a filter callback.
