@@ -100,6 +100,21 @@ class ManagerTest extends ServiceTestCase
 		$this->assertTrue($this->config->get('app.loaded'));
 	}
 
+	public function testFilters()
+	{
+		$expected = 'filtered';
+		$original = 'original';
+		$this->config->filter('app.filtered', function($value, $config) use($original, $expected){
+			pprint('Filtering', current_filter());
+			pprint('Filtering', current_filter());
+			return $value === $original ? $expected : $value;
+		});
+
+		$result = $this->config->get('app.filtered');
+
+		$this->assertEquals($expected, $result);
+	}
+
 	public function testGetFromNamespace()
 	{
 		$this->assertTrue($this->config->get('auth::session.loaded'));
@@ -147,5 +162,10 @@ class ManagerTest extends ServiceTestCase
 		$this->config->merge( $this->config->getRepository(), 'foo');
 
 		$this->assertTrue($this->config->get('foo::app.loaded'));
+	}
+
+	public function testGetFilteredAfterMerge()
+	{
+		$this->assertEquals( 'filtered', $this->config->get('foo::app.filtered'));
 	}
 }

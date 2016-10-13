@@ -5,6 +5,8 @@ use TeaPress\Contracts\Signals\Hub;
 
 interface Repository
 {
+
+
 	/**
 	 * Determine if the given configuration value exists.
 	 *
@@ -62,7 +64,7 @@ interface Repository
 	 *
 	 * @return array
 	 */
-	public function getItems();
+	public function getItems($filter=false);
 
 
 	/**
@@ -92,20 +94,4 @@ interface Repository
 	 */
 	public function getNamespace();
 
-	/**
-	 * Get the signals hub instance.
-	 *
-	 * @return \TeaPress\Contracts\Signals\Hub
-	 */
-	public function getSignals();
-
-
-	/**
-	 * Set the signals hub instance.
-	 *
-	 * @param  \TeaPress\Contracts\Signals\Hub  $key
-	 *
-	 * @return void
-	 */
-	public function setSignals(Hub $signals);
 }

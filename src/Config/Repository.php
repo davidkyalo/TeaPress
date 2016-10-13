@@ -5,11 +5,12 @@ namespace TeaPress\Config;
 use ArrayIterator;
 use TeaPress\Utils\Arr;
 use TeaPress\Contracts\Utils\Arrayable;
+use TeaPress\Contracts\Config\Filterable;
 use TeaPress\Contracts\Utils\ArrayBehavior;
 use TeaPress\Contracts\Signals\Hub as Signals;
 use TeaPress\Contracts\Config\Repository as Contract;
 
-class Repository implements Contract, ArrayBehavior, Arrayable
+class Repository implements Contract, Filterable, ArrayBehavior, Arrayable
 {
 	/**
 	 * The Signals Hub
@@ -26,6 +27,13 @@ class Repository implements Contract, ArrayBehavior, Arrayable
 	protected $namespace;
 
 	/**
+	 * The unique identifire for this repository's filters.
+	 *
+	 * @var string
+	 */
+	protected $signalsDomain;
+
+	/**
 	 * All of the configuration items.
 	 *
 	 * @var array
@@ -37,7 +45,7 @@ class Repository implements Contract, ArrayBehavior, Arrayable
 	 *
 	 * @var array
 	 */
-	protected $filters = [];
+	protected $filtered = [];
 
 	/**
 	 * Create a new configuration repository.
@@ -52,6 +60,13 @@ class Repository implements Contract, ArrayBehavior, Arrayable
 		$this->namespace = $namespace;
 	}
 
+	protected function filterValue($key, $value)
+	{
+		if($this->signals){
+			$value = $this->signals->applyFilters($this->getFilterTag($key), $value, $this);
+		}
+		return $value;
+	}
 
 	/**
 	* Bind a config value filter. The provided callback will be executed every time the an attempt to get the value is made.
@@ -62,9 +77,14 @@ class Repository implements Contract, ArrayBehavior, Arrayable
 	*
 	* @return bool
 	*/
-	public function filter($key, $callback, $priority = null)
+	public function filter($key, $callback, $priority = null, $force =false)
 	{
-
+		if($this->signals){
+			$tag = $this->getFilterTag($key);
+			$this->signals->addFilter($tag, $callback, $priority);
+			$this->filtered[$key] = true;
+		}
+		return true;
 	}
 
 	/**
@@ -79,22 +99,48 @@ class Repository implements Contract, ArrayBehavior, Arrayable
 		if(is_null($key))
 			return $this->filtered;
 
-		return
-		if( $this->signals ){
-
-		}
+		return isset($this->filtered[$key]); //&& $this->filtered[$key];
 	}
 
 	/**
+	 * Get the specified configuration value.
+	 *
+	 * @param  string 	$key
+	 *
+	 * @return string|array
+	 */
+	public function getFilterTag($key)
+	{
+		$domain = $this->getSignalsDomain();
+
+		if($domain && $domain[0] !== '@')
+			$domain = '@'.$domain;
+
+		return [$this->getSignalsNamespace(), $key.$domain];
+	}
+
+	/**
+	* Get this emitter's events namespace.
+	*
+	* @return string|null
+	*/
+	protected function getSignalsNamespace()
+	{
+		return Contract::class;
+	}
+
+
+	/**
 	 * Determine if the given configuration value exists.
+	 * If filters is true, returns true if the key has any filters.
 	 *
 	 * @param  string  $key
-	 * @param  bool  $filter whether or not to apply filters.
+	 * @param  bool  $filters  whether or not to check on filters.
 	 * @return bool
 	 */
-	public function has($key, $filter=true)
+	public function has($key, $filters=false)
 	{
-		return $this->get($key, NOTHING, $filter) !== NOTHING;
+		return Arr::has($this->items, $key) || ( $filters && $this->filtered($key) );
 	}
 
 	/**
@@ -107,7 +153,13 @@ class Repository implements Contract, ArrayBehavior, Arrayable
 	 */
 	public function get($key, $default = null, $filter=true)
 	{
-		return Arr::get($this->items, $key, $default);
+		$value = Arr::get($this->items, $key, $default);
+
+		if( $filter && $this->filtered($key) ){
+			$value = $this->filterValue($key, $value);
+		}
+
+		return $value;
 	}
 
 	/**
@@ -169,7 +221,18 @@ class Repository implements Contract, ArrayBehavior, Arrayable
 	 */
 	public function getItems($filter=false)
 	{
-		return $this->items;
+		$items = $this->items;
+
+		if($filter){
+			foreach ( (array) $this->filtered() as $key => $is_filtered) {
+
+				if(!$is_filtered) continue;
+
+				Arr::set( $items, $key, $this->filterValue( $key, Arr::get($items, $key) ) );
+
+			}
+		}
+		return $items;
 	}
 
 	/**
@@ -194,10 +257,21 @@ class Repository implements Contract, ArrayBehavior, Arrayable
 	 */
 	public function merge($items, $recursive = true)
 	{
-		if($items instanceof Contract){
+		if($items instanceof Filterable && $this->signals){
+			foreach ( (array) $items->filtered() as $key => $is_filtered) {
+				if(!$is_filtered) continue;
+
+				$filters = $this->signals->getCallbacksMerged( $items->getFilterTag( $key ), false );
+
+				foreach ($filters as $filter) {
+					$this->filter( $key, $filter['callback'], $filter['priority'] );
+				}
+			}
+		}
+
+		if($items instanceof Contract)
 			$items = $items->getItems();
 
-		}
 
 		if($recursive)
 			$this->set( Arr::dot( (array) $items ) );
@@ -241,11 +315,10 @@ class Repository implements Contract, ArrayBehavior, Arrayable
 		return $this->signals;
 	}
 
-
 	/**
 	 * Set the signals hub instance.
 	 *
-	 * @param  \TeaPress\Contracts\Signals\Hub  $key
+	 * @param  \TeaPress\Contracts\Signals\Hub  $signals
 	 *
 	 * @return void
 	 */
@@ -256,13 +329,36 @@ class Repository implements Contract, ArrayBehavior, Arrayable
 
 
 	/**
+	* Get the signals domain.
+	*
+	* @return string|null
+	*/
+	protected function getSignalsDomain()
+	{
+		return $this->signalsDomain ?: ($this->namespace == '*' ? '': $this->namespace );
+	}
+
+	/**
+	 * Set the signals domain.
+	 *
+	 * @param  string  $domain
+	 *
+	 * @return void
+	 */
+	public function setSignalsDomain($domain)
+	{
+		$this->signalsDomain = $domain;
+	}
+
+
+	/**
 	 * Get the number of configuration items.
 	 *
 	 * @return int
 	 */
 	public function count()
 	{
-		return count($this->items);
+		return count($this->getItems());
 	}
 
 	/**

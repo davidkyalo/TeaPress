@@ -326,7 +326,6 @@ class Hub implements Contract {
 		return $this->container->getAlias(is_object($emitter) ? get_class($emitter) : $emitter ).':'.$tag;
 	}
 
-
 	/**
 	* Bind the given callback to the specified $event.
 	*
@@ -338,7 +337,7 @@ class Hub implements Contract {
 	*
 	* @return static
 	*/
-	public function bind($tag, $callback, $priority = null, $accepted_args = null, $once = null, $weak = null)
+	public function bind($tag, $callback, $priority = null, $accepted_args = null, $once = null, $weak = false)
 	{
 		if( is_bool($accepted_args) && is_null($once) ){
 			$once = $accepted_args;
@@ -365,7 +364,7 @@ class Hub implements Contract {
 
 		$this->bumpBindingsCount($callback, $tag, $once);
 
-		return $this->getCallbackId($callback);
+		return $this;
 	}
 
 	/**
@@ -414,7 +413,7 @@ class Hub implements Contract {
 	*/
 	public function addFilter($tag, $callback, $priority = null, $accepted_args = null, $once = null)
 	{
-		return $this->bind($tag, $callback, $priority, $accepted_args, $once, true);
+		return $this->bind($tag, $callback, $priority, $accepted_args, $once);
 	}
 
 
@@ -719,7 +718,7 @@ class Hub implements Contract {
 
 
 	/**
-	* get all the bound callbacks for the given hook
+	* Get an array of all the bound callbacks for the given hook grouped by priority unless merged is true.
 	*
 	* @param  string|array 	$tag
 	* @param  bool			$sorted
@@ -752,10 +751,11 @@ class Hub implements Contract {
 						'accepted_args' => $cb['accepted_args']
 					];
 
+
 				if($merged)
 					$callbacks[] = $callback;
 				else
-					$callback[$pr][] = $callback;
+					$callbacks[$pr][] = $callback;
 			}
 		}
 		return $callbacks;
@@ -763,7 +763,7 @@ class Hub implements Contract {
 
 
 	/**
-	* get all the bound callbacks for the given hook
+	* Gets a flat array of all the bound callbacks for the given hook
 	*
 	* @param  string|array 	$tag
 	* @param  bool			$sorted
@@ -774,41 +774,6 @@ class Hub implements Contract {
 	{
 		return $this->getCallbacks($tag, $sorted, true);
 	}
-
-	// /**
-	// * get all the bound callbacks for the given hook
-	// *
-	// * @param  string|array 	$tag
-	// * @param  bool			$sort
-	// *
-	// * @return array
-	// */
-	// public function getBoundHandlers($tag, $sort = true)
-	// {
-	// 	global $wp_filter, $merged_filters;
-
-	// 	$tag = $this->getTag($tag);
-
-	// 	if ( !isset($wp_filter[$tag]) )
-	// 		return [];
-
-	// 	if ( $sort && !isset($merged_filters[ $tag ]) ) {
-	// 		ksort($wp_filter[$tag]);
-	// 		$merged_filters[ $tag ] = true;
-	// 	}
-
-	// 	reset($wp_filter[$tag]);
-
-	// 	$bound = [];
-
-	// 	foreach ($wp_filter[$tag] as $priority) {
-	// 		foreach ( (array) $priority as $callback) {
-	// 			$bound[] = $callback['function'];
-	// 		}
-	// 	}
-
-	// 	return $bound;
-	// }
 
 /* Illuminate\Contracts\Events\Dispatcher */
 

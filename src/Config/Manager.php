@@ -6,13 +6,14 @@ use ArrayIterator;
 use TeaPress\Utils\Arr;
 use InvalidArgumentException;
 use TeaPress\Contracts\Utils\Arrayable;
+use TeaPress\Contracts\Config\Filterable;
 use TeaPress\Contracts\Utils\ArrayBehavior;
 use Illuminate\Support\NamespacedItemResolver;
 use TeaPress\Contracts\Signals\Hub as Signals;
 use TeaPress\Contracts\Config\Manager as Contract;
 use TeaPress\Contracts\Config\Repository as RepositoryContract;
 
-class Manager extends NamespacedItemResolver implements Contract, ArrayBehavior, Arrayable
+class Manager extends NamespacedItemResolver implements Contract, Filterable, ArrayBehavior, Arrayable
 {
 
 	/**
@@ -70,13 +71,13 @@ class Manager extends NamespacedItemResolver implements Contract, ArrayBehavior,
 	 * @param  string  $key
 	 * @return bool
 	 */
-	public function has($key)
+	public function has($key, $filters=false)
 	{
 		list($namespace, $item) = $this->parseKey($key);
 
 		$config = $this->getRepository($namespace);
 
-		return $config ? $config->has($item) : false;
+		return $config ? $config->has($item, $filters) : false;
 	}
 
 	/**
@@ -86,13 +87,13 @@ class Manager extends NamespacedItemResolver implements Contract, ArrayBehavior,
 	 * @param  mixed   $default
 	 * @return mixed
 	 */
-	public function get($key, $default = null)
+	public function get($key, $default = null, $filter =true)
 	{
 		list($namespace, $item) = $this->parseKey($key);
 
 		$config = $this->getRepository($namespace);
 
-		return $config ? $config->get($item, $default) : value($default);
+		return $config ? $config->get($item, $default, $filter) : value($default);
 	}
 
 	/**
@@ -144,24 +145,6 @@ class Manager extends NamespacedItemResolver implements Contract, ArrayBehavior,
 		$config = $this->getOrCreateRepository($namespace);
 
 		return $config->push($item, $value);
-	}
-
-	/**
-	* Bind a config value filter. The provided callback will be executed every time the an attempt to get the value is made.
-	*
-	* @param  string  $key
-	* @param  \Closure|array|string  $callback
-	* @param  int|null  $priority
-	*
-	* @return bool
-	*/
-	public function filter($key, $callback, $priority = null)
-	{
-		list($namespace, $item) = $this->parseKey($key);
-
-		$repository = $this->getOrCreateRepository($namespace);
-
-		return $repository->filter($item, $callback, $priority);
 	}
 
 	/**
@@ -410,21 +393,112 @@ class Manager extends NamespacedItemResolver implements Contract, ArrayBehavior,
 	 * @param  string  $namespace
 	 * @return string
 	 */
-	protected function getNamespace($namespace = null)
+	public function getNamespace($namespace = null)
 	{
 		return $namespace ?: '*';
 	}
+
+	/**
+	 * Set the appropriate namespace depending on the the provided.
+	 *
+	 * @param  string  $namespace
+	 * @return string
+	 */
+	public function setNamespace($namespace)
+	{
+		//
+	}
+
+
+
+	/**
+	 * Get the signals hub instance.
+	 *
+	 * @return \TeaPress\Contracts\Signals\Hub
+	 */
+	public function getSignals()
+	{
+		return $this->signals;
+	}
+
+
+	/**
+	 * Set the signals hub instance.
+	 *
+	 * @param  \TeaPress\Contracts\Signals\Hub  $key
+	 *
+	 * @return void
+	 */
+	public function setSignals(Signals $signals)
+	{
+		$this->signals = $signals;
+	}
+
+
+	/**
+	* Bind a config value filter. The provided callback will be executed every time the an attempt to get the value is made.
+	*
+	* @param  string  $key
+	* @param  \Closure|array|string  $callback
+	* @param  int|null  $priority
+	*
+	* @return bool
+	*/
+	public function filter($key, $callback, $priority = null)
+	{
+		list($namespace, $item) = $this->parseKey($key);
+
+		$repository = $this->getOrCreateRepository($namespace);
+
+		if($repository instanceof Filterable)
+			return $repository->filter($item, $callback, $priority);
+	}
+
+	/**
+	* Determine if the given key has filters. If a key is not specified, returns an array of filtered keys
+	*
+	* @param  string  $key
+	*
+	* @return bool|array
+	*/
+	public function filtered($key=null)
+	{
+		list($namespace, $item) = $this->parseKey($key);
+
+		$repository = $this->getRepository($namespace);
+
+		return $repository && ($repository instanceof Filterable)
+					? $repository->filtered($item) : (is_null($item) ? [] : false);
+	}
+
+	/**
+	 * Get the specified configuration value.
+	 *
+	 * @param  string 	$key
+	 *
+	 * @return string|array
+	 */
+	public function getFilterTag($key)
+	{
+		list($namespace, $item) = $this->parseKey($key);
+
+		$repository = $this->getOrCreateRepository($namespace);
+
+		if($repository instanceof Filterable)
+			return $repository->getFilterTag($item);
+	}
+
 
 	/**
 	 * Get all of the configuration items for the application.
 	 *
 	 * @return array
 	 */
-	public function getItems()
+	public function getItems($filter=false)
 	{
 		$config = [];
 		foreach ($this->repositories as $key => $repository) {
-			$config[$key] = $repository->getItems();
+			$config[$key] = $repository->getItems($filter);
 		}
 		return $config;
 	}

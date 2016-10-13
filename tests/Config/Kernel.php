@@ -27,7 +27,7 @@ class Kernel extends TestKernel
 	public function register()
 	{
 		$this->app->singleton('config', function($app){
-			return new Manager( new FileLoader($app->make(Filesystem::class)), __DIR__.'/data/default' );
+			return new Manager( new FileLoader($app->make(Filesystem::class)), $app['signals'], __DIR__.'/data/default' );
 		});
 		$this->aliasServices($this->serviceAliases());
 	}

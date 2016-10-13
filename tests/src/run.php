@@ -47,20 +47,23 @@ if(!function_exists('pprint')){
 	function pprint($k, $v = NOTHING, $l=5)
 	{
 		static $started=false;
-
+		$out = "";
 		if(!$started){
-			echo "\n";
+			$out .= "\n";
 			$started = true;
 		}
 
+		$out .= "\n";
 		$pad = ($l - strlen($k)) > 1 ? str_repeat(' ', ($l - strlen($k))) : '';
-		echo "{$k}{$pad} ";
+		$out .= "{$k}{$pad} ";
 		if($v !== NOTHING){
-			echo ": ";
-			var_export($v);
+			$out .= ": ";
+			$out .= var_export($v, true);
 			// var_dump($v);
 		}
-		echo "\n";
+		$out .= ";    ";
+		// $out .= "\n";
+		echo $out;
 	}
 }
 
