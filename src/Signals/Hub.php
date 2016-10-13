@@ -84,7 +84,7 @@ class Hub implements Contract {
 	 */
 	public function registerAllActionHook()
 	{
-		$this->bind('all', function($tag){
+		$this->bindWeak('all', function($tag){
 			global $wp_actions;
 
 			$this->unbindFlushedCallbacks();
@@ -326,7 +326,6 @@ class Hub implements Contract {
 		return $this->container->getAlias(is_object($emitter) ? get_class($emitter) : $emitter ).':'.$tag;
 	}
 
-
 	/**
 	* Bind the given callback to the specified $event.
 	*
@@ -338,7 +337,7 @@ class Hub implements Contract {
 	*
 	* @return static
 	*/
-	public function bind($tag, $callback, $priority = null, $accepted_args = null, $once = null, $naked = false)
+	public function bind($tag, $callback, $priority = null, $accepted_args = null, $once = null, $weak = false)
 	{
 		if( is_bool($accepted_args) && is_null($once) ){
 			$once = $accepted_args;
@@ -354,22 +353,23 @@ class Hub implements Contract {
 		if($xbindings === true || $xbindings && $once )
 			throw new BadMethodCallException("Bind once constraint broken. Can't rebind '{$callback}' to '{$tag}'.");
 
+		if(is_null($weak)) $weak = false;
 
-		$bindable = $naked ? $callback : $this->getOrCreateWrapper($callback, $priority);
-
-		// $bindable = $wrap || $once || !$this->isBindable($callback)
-		// 			? $this->getOrCreateWrapper($callback, $priority) : $callback;
+		if( !$weak || $once || !$this->isBindable($callback) )
+			$bindable = $this->getOrCreateWrapper($callback, $priority);
+		else
+			$bindable = $callback;
 
 		add_filter( $tag, $bindable, $priority, $accepted_args );
 
 		$this->bumpBindingsCount($callback, $tag, $once);
 
-		return $this->getCallbackId($callback);
+		return $this;
 	}
 
 	/**
 	* Bind an action callback.
-	*Naked
+	*
 	* @param  array|string					$tag
 	* @param  \Closure|array|string 		$callback
 	* @param  int|null						$priority
@@ -378,11 +378,10 @@ class Hub implements Contract {
 	*
 	* @return static
 	*/
-	public function bindNaked($tag, $callback, $priority = null, $accepted_args = null)
+	public function bindWeak($tag, $callback, $priority = null, $accepted_args = null)
 	{
-		return $this->bind($tag, $callback, $priority, $accepted_args, null, false);
+		return $this->bind($tag, $callback, $priority, $accepted_args, null, true);
 	}
-
 
 	/**
 	* Bind an action callback.
@@ -719,14 +718,15 @@ class Hub implements Contract {
 
 
 	/**
-	* get all the bound callbacks for the given hook
+	* Get an array of all the bound callbacks for the given hook grouped by priority unless merged is true.
 	*
 	* @param  string|array 	$tag
-	* @param  bool			$sort
+	* @param  bool			$sorted
+	* @param  bool			$merged
 	*
 	* @return array
 	*/
-	public function getBoundCallbacks($tag, $sort = true)
+	public function getCallbacks($tag, $sorted=true, $merged=false)
 	{
 		global $wp_filter, $merged_filters;
 
@@ -735,22 +735,44 @@ class Hub implements Contract {
 		if ( !isset($wp_filter[$tag]) )
 			return [];
 
-		if ( $sort && !isset($merged_filters[ $tag ]) ) {
-			ksort($wp_filter[$tag]);
-			$merged_filters[ $tag ] = true;
-		}
+		$copy = $wp_filter[$tag];
 
-		reset($wp_filter[$tag]);
+		if( $sorted && !isset($merged_filters[$tag]) )
+			ksort($copy);
 
-		$bound = [];
+		$callbacks = [];
+		foreach ($copy as $pr => $cbs) {
+			foreach ( (array) $cbs as $cb) {
+				$callback = [
+						'callback' 		=> $cb['function'] instanceof Handler
+								? $cb['function']->getCallback() : $cb['function'],
+						'priority' 		=> $pr,
+						'handler' => $cb['function'],
+						'accepted_args' => $cb['accepted_args']
+					];
 
-		foreach ($wp_filter[$tag] as $priority) {
-			foreach ( (array) $priority as $callback) {
-				$bound[] = $callback['function'];
+
+				if($merged)
+					$callbacks[] = $callback;
+				else
+					$callbacks[$pr][] = $callback;
 			}
 		}
+		return $callbacks;
+	}
 
-		return $bound;
+
+	/**
+	* Gets a flat array of all the bound callbacks for the given hook
+	*
+	* @param  string|array 	$tag
+	* @param  bool			$sorted
+	*
+	* @return array
+	*/
+	public function getCallbacksMerged($tag, $sorted=true)
+	{
+		return $this->getCallbacks($tag, $sorted, true);
 	}
 
 /* Illuminate\Contracts\Events\Dispatcher */
@@ -763,10 +785,10 @@ class Hub implements Contract {
 	 * @param  int  $priority
 	 * @return void
 	 */
-	public function listen($events, $listener, $priority = null)
+	public function listen($events, $listener, $priority = null, $once = null)
 	{
 		foreach ((array) $events as $event) {
-			$this->bind($event, $listener, $priority, null, false, true);
+			$this->bind($event, $listener, $priority, null, $once, false);
 		}
 	}
 
@@ -967,7 +989,7 @@ class Hub implements Contract {
 		return $response;
 	}
 
-	protected function currentSignal()
+	public function currentSignal()
 	{
 		$signal = $this->current();
 		return [ $signal, ( $signal && isset($this->responses[$signal]) ) ];
@@ -981,7 +1003,7 @@ class Hub implements Contract {
 	 *
 	 * @return int
 	 */
-	protected function checkPriority($priority = null){
+	public function checkPriority($priority = null){
 		return is_null($priority) ? 10 : (int) $priority;
 	}
 
@@ -992,7 +1014,7 @@ class Hub implements Contract {
 	 *
 	 * @return int
 	 */
-	protected function checkAcceptedArgs($accepted_args = null){
+	public function checkAcceptedArgs($accepted_args = null){
 		return is_null($accepted_args) ? 20 : (int) $accepted_args;
 	}
 
@@ -1072,7 +1094,7 @@ class Hub implements Contract {
 	*
 	* @return \Closure
 	*/
-	protected function registerWrapper($callback, Closure $wrapper)
+	protected function registerWrapper($callback, $wrapper)
 	{
 		return $this->wrappers[$this->getCallbackId( $callback )] = $wrapper;
 	}
@@ -1230,6 +1252,25 @@ class Hub implements Contract {
 		};
 	}
 
+	public function invokeCallback($callback, $parameters, $priority)
+	{
+
+		list($signal, $emitting) = $this->currentSignal();
+
+		$response = $emitting ? Arr::last($this->responses[$signal]) : null;
+
+		if($emitting && (!$this->halting[$signal] || is_null($response)) ){
+			$this->responses[$signal][] = $response = call_user_func_array( $this->getCallable($callback), $parameters );
+		}
+		elseif (!$emitting) {
+			$response = call_user_func_array( $this->getCallable($callback), $parameters );
+		}
+
+		if( $this->boundOnce( $callback, $signal ) )
+			$this->flushCallback($signal, $callback, $priority);
+
+		return $response;
+	}
 
 	/**
 	 * Wrap a hook's callback with a closure to ensure it's executed correctly.
@@ -1240,24 +1281,26 @@ class Hub implements Contract {
 	 */
 	protected function wrapCallback($callback, $priority = null)
 	{
-		return function () use ($callback, $priority)
-		{
-			list($signal, $emitting) = $this->currentSignal();
+		return new Handler($callback, $priority, $this);
 
-			$response = $emitting ? Arr::last($this->responses[$signal]) : null;
+		// return function () use ($callback, $priority)
+		// {
+		// 	list($signal, $emitting) = $this->currentSignal();
 
-			if($emitting && (!$this->halting[$signal] || is_null($response)) ){
-				$this->responses[$signal][] = $response = call_user_func_array( $this->getCallable($callback), func_get_args() );
-			}
-			elseif (!$emitting) {
-				$response = call_user_func_array( $this->getCallable($callback), func_get_args() );
-			}
+		// 	$response = $emitting ? Arr::last($this->responses[$signal]) : null;
 
-			if( $this->boundOnce( $callback, $signal ) )
-				$this->flushCallback($signal, $callback, $priority);
+		// 	if($emitting && (!$this->halting[$signal] || is_null($response)) ){
+		// 		$this->responses[$signal][] = $response = call_user_func_array( $this->getCallable($callback), func_get_args() );
+		// 	}
+		// 	elseif (!$emitting) {
+		// 		$response = call_user_func_array( $this->getCallable($callback), func_get_args() );
+		// 	}
 
-			return $response;
-		};
+		// 	if( $this->boundOnce( $callback, $signal ) )
+		// 		$this->flushCallback($signal, $callback, $priority);
+
+		// 	return $response;
+		// };
 	}
 
 	/**
@@ -1267,7 +1310,7 @@ class Hub implements Contract {
 	 *`
 	 * @return callable
 	 */
-	public function getCallable($callback)
+	protected function getCallable($callback)
 	{
 		if(is_callable($callback))
 			return $callback;

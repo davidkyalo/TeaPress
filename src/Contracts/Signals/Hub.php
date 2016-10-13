@@ -192,11 +192,10 @@ interface Hub extends Dispatcher {
 	* @param  \Closure|array|string 		$callback
 	* @param  int|null						$priority
 	* @param  int|null|bool					$accepted_args
-	* @param  bool							$once
 	*
 	* @return static
 	*/
-	public function bindWrapped($tag, $callback, $priority = null, $accepted_args = null, $once = null);
+	public function bindWeak($tag, $callback, $priority = null, $accepted_args = null);
 
 	/**
 	* Bind a filter callback.
@@ -431,13 +430,26 @@ interface Hub extends Dispatcher {
 	*/
 	public function applyFilters($tag, $item=null, ...$payload);
 
+
 	/**
-	* get all the bound callbacks for the given hook
+	* Get an array of all the bound callbacks for the given hook grouped by priority unless merged is true.
 	*
 	* @param  string|array 	$tag
-	* @param  bool			$sort
+	* @param  bool			$sorted
+	* @param  bool			$merged
 	*
 	* @return array
 	*/
-	public function getBoundCallbacks($tag, $sort = true);
+	public function getCallbacks($tag, $sorted=true, $merged=false);
+
+
+	/**
+	* Gets a flat array of all the bound callbacks for the given hook
+	*
+	* @param  string|array 	$tag
+	* @param  bool			$sorted
+	*
+	* @return array
+	*/
+	public function getCallbacksMerged($tag, $sorted=true);
 }

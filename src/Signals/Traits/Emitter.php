@@ -85,7 +85,7 @@ trait Emitter {
 	protected static function bindCallback($hook, $callback, $priority = null, $accepted_args = null, $once = null)
 	{
 		if($hub = static::getSignalsHub()){
-			$hub->bind( static::getHookTag($hook), $callback, $priority, $accepted_args, $once, true);
+			$hub->bind( static::getHookTag($hook), $callback, $priority, $accepted_args, $once);
 			return true;
 		}
 

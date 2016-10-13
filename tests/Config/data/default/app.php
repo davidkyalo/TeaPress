@@ -10,6 +10,8 @@ return [
 
 	'host'	=> 'http://app.com',
 
+	'filtered' => 'original',
+
 	'aliases' => [
 		'app'		=> 'App',
 		'user'		=> 'User',
