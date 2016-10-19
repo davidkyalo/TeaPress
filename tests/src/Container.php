@@ -155,12 +155,12 @@ class Container extends BaseContainer
 	public function alias($abstract, $alias)
 	{
 		parent::alias($abstract, $alias);
-		Arr::pushAll($this->serviceAliases,  $abstract, (array) $alias, true, '>>');
+		Arr::pushUnique($this->serviceAliases, [$abstract, '>>'], ...(array) $alias);
 	}
 
 	public function serviceAliases($abstract)
 	{
 		$abstract = $this->getAlias($abstract);
-		return Arr::get($this->serviceAliases, $this->getAlias($abstract) , [], '>>');
+		return Arr::get($this->serviceAliases, [$abstract, '>>'] , []);
 	}
 }

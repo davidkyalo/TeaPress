@@ -143,14 +143,16 @@ class FileLoader implements LoaderInterface
 	{
 		if( is_array($paths) && Arr::isAssoc($paths) ){
 			foreach ($paths as $key => $path) {
-				if(is_array($path))
-					Arr::pushAll($this->namespaces, $namespace.'.'.$key, $path, true);
-				else
-					Arr::push($this->namespaces, $namespace.'.'.$key, $path, true);
+				Arr::pushUnique($this->namespaces, $namespace.'.'.$key, ...(array) $path);
+				// if(is_array($path))
+				// 	Arr::pushAll($this->namespaces, $namespace.'.'.$key, $path, true);
+				// else
+				// 	Arr::push($this->namespaces, $namespace.'.'.$key, $path, true);
 			}
 		}
 		else{
-			Arr::pushAll($this->namespaces, $namespace, (array) $paths, true);
+			Arr::pushUnique($this->namespaces, $namespace, ...(array) $paths);
+			// Arr::pushAll($this->namespaces, $namespace, (array) $paths, true);
 		}
 	}
 

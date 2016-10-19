@@ -9,9 +9,7 @@ class SignalsKernel extends Kernel
 
 	public function register()
 	{
-		$this->app->singleton('signals', function($app){
-			return new Hub($app);
-		});
+		$this->app->instance('signals', new Hub($this->app));
 	}
 
 

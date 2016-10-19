@@ -1,8 +1,8 @@
 <?php
 
-namespace Tea\Tests\Utils;
+namespace TeaPress\Tests\Utils;
 
-use Tea\Utils\Str;
+use TeaPress\Utils\Str;
 use PHPUnit_Framework_TestCase;
 
 class StrTest extends PHPUnit_Framework_TestCase
@@ -14,7 +14,6 @@ class StrTest extends PHPUnit_Framework_TestCase
 		$size = 5;
 		$with = 0;
 		$result = Str::pad($orig, $size, $with);
-		fwd_dump( 'Str Padding: '. __FUNCTION__, compact('orig', 'size', 'with', 'result') );
 		$this->assertEquals( '12300', $result );
 	}
 
@@ -24,7 +23,7 @@ class StrTest extends PHPUnit_Framework_TestCase
 		$size = -5;
 		$with = 0;
 		$result = Str::pad($orig, $size, $with);
-		fwd_dump( 'Str Padding: '. __FUNCTION__, compact('orig', 'size', 'with', 'result') );
+
 		$this->assertEquals( '00123', $result );
 	}
 
@@ -34,7 +33,7 @@ class StrTest extends PHPUnit_Framework_TestCase
 		$size = -4;
 		$with = 0;
 		$result = Str::pad($orig, $size, $with);
-		fwd_dump( 'Str Padding: '. __FUNCTION__, compact('orig', 'size', 'with', 'result') );
+
 		$this->assertEquals( '12345', $result );
 	}
 
@@ -44,7 +43,7 @@ class StrTest extends PHPUnit_Framework_TestCase
 		$size = -7;
 		$with = '<->';
 		$result = Str::pad($orig, $size, $with);
-		fwd_dump( 'Str Padding: '. __FUNCTION__, compact('orig', 'size', 'with', 'result') );
+
 		$this->assertEquals( '<-><123', $result );
 	}
 

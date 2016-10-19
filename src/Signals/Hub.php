@@ -910,7 +910,8 @@ class Hub implements Contract {
 	public function responses($tag = null, $default = [])
 	{
 		if(!is_null($tag)) $tag = $this->getTag($tag);
-		return Arr::get($this->responses, $tag, $default, '->->');
+		// return Arr::get($this->responses, $tag, $default, '->->');
+		return Arr::get($this->responses, [$tag, '->->'], $default);
 	}
 
 	/**
@@ -921,7 +922,8 @@ class Hub implements Contract {
 	public function halting($tag = null)
 	{
 		if(!is_null($tag)) $tag = $this->getTag($tag);
-		return Arr::get($this->halting, $tag, false, '->->');
+		// return Arr::get($this->halting, $tag, false, '->->');
+		return Arr::get($this->halting, [$tag, '->->'], false);
 	}
 
 	/**
@@ -1126,6 +1128,9 @@ class Hub implements Contract {
 	*/
 	protected function bumpBindingsCount($callback, $tag, $once = false)
 	{
+		/*
+		Before new Arr key notations.
+
 		$id = $this->getCallbackId( $callback );
 
 		$n = '->->';
@@ -1140,6 +1145,24 @@ class Hub implements Contract {
 		Arr::set( $this->bound, $key, $count, $n);
 
 		return (int) $count;
+
+		*/
+
+		// With new Arr key notations.
+		$id = $this->getCallbackId( $callback );
+
+		$n = '->->';
+		$key = [$id.$n.$tag, $n];
+		$count = Arr::get( $this->bound, $key, 0);
+
+		if( $count === true )
+			return $count;
+
+		$count = ($once ? true : $count+1);
+
+		Arr::set( $this->bound, $key, $count);
+
+		return (int) $count;
 	}
 
 	/**
@@ -1152,6 +1175,9 @@ class Hub implements Contract {
 	*/
 	protected function subBindingsCount($callback, $tag)
 	{
+		/*
+		Before new Arr key notations.
+
 		$id = $this->getCallbackId( $callback );
 
 		$n = '->->';
@@ -1164,6 +1190,27 @@ class Hub implements Contract {
 				Arr::forget($this->bound, $key, $n);
 			else
 				Arr::set( $this->bound, $key, $count, $n);
+		}
+
+		if(empty($this->bound[$id]))
+			unset($this->bound[$id]);
+
+		return $count;
+		*/
+
+		// With new Arr key notations.
+		$id = $this->getCallbackId( $callback );
+
+		$n = '->->';
+		$key = [$id.$n.$tag, $n];
+		$count = Arr::get( $this->bound, $key, null);
+
+		if(!is_null($count)){
+			$count = ( (int) $count ) - 1;
+			if($count <= 0)
+				Arr::forget($this->bound, $key[0], $n);
+			else
+				Arr::set( $this->bound, $key, $count);
 		}
 
 		if(empty($this->bound[$id]))
@@ -1189,7 +1236,7 @@ class Hub implements Contract {
 		$n = '->->';
 		$id = $this->getCallbackId($callback);
 		$key = is_null($tag) ? $id : $id.$n.$tag;
-		return  Arr::get($this->bound, $key, $default, $n);
+		return  Arr::get($this->bound,[$key, $n], $default);
 	}
 
 

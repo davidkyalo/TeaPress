@@ -75,37 +75,15 @@ class Application extends Container implements Contract
 	 *
 	 * @param  string|null  $basePath
 	 *
-	 * @throws \BadMethodCallException
-	 *
 	 * @return static
 	 */
-	public static function create($basePath = null)
-	{
-		if($instance = static::getInstance()){
-			throw new BadMethodCallException("Application instance already created.");
-		}
-
-		return new static($basePath);
-	}
-
-
-	/**
-	 * Creates the application instance.
-	 *
-	 * @param  string|null  $basePath
-	 *
-	 * @return static
-	 */
-	protected function __construct($basePath = null)
+	public function __construct($basePath = null)
 	{
 		if($basePath){
 			$this->setBasePath($basePath);
 		}
 
 		$this->registerBaseBindings();
-		$this->registerClassAliasLoader();
-
-		$this->registerBaseKernels();
 	}
 
 
@@ -129,12 +107,6 @@ class Application extends Container implements Contract
 
 	}
 
-	protected function registerClassAliasLoader()
-	{
-		$loader = AliasLoader::getInstance();
-		$loader->register();
-		$this->instance('alias', $loader);
-	}
 
 /* Path methods */
 
@@ -262,16 +234,6 @@ class Application extends Container implements Contract
 			$this->bootstrap();
 		else
 			$this->signals->bind($event, [$this, 'bootstrap'], $priority);
-	}
-
-	/**
-	* Register the this instance as a service.
-	*
-	* @return void
-	*/
-	protected function registerBaseKernels()
-	{
-		$this->register(new SignalsKernel($this, null));
 	}
 
 	/**
@@ -418,7 +380,7 @@ class Application extends Container implements Contract
 	 */
 	public function createKernel($kernel)
 	{
-		return new $kernel($this, $this['signals']);
+		return new $kernel($this, ($this->bound('signals') ? $this->make('signals') : null) );
 	}
 
 	/**

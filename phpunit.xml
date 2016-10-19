@@ -12,10 +12,6 @@
 			debug="true"
 			bootstrap="./tests/bootstrap.php">
 	<testsuites>
-		<testsuite name="hooks">
-			<directory>./tests/Hooks/</directory>
-		</testsuite>
-
 		<testsuite name="filesystem">
 			<directory>./tests/Filesystem/</directory>
 		</testsuite>
@@ -30,6 +26,18 @@
 
 		<testsuite name="database">
 			<directory>./tests/Database/</directory>
+		</testsuite>
+
+		<testsuite name="utils">
+			<directory>./tests/Utils/</directory>
+		</testsuite>
+
+		<testsuite name="utils.arr">
+			<file>./tests/Utils/ArrTest.php</file>
+		</testsuite>
+
+		<testsuite name="utils.str">
+			<file>./tests/Utils/StrTest.php</file>
 		</testsuite>
 
 	</testsuites>

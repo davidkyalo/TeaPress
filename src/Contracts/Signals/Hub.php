@@ -84,9 +84,7 @@ interface Hub extends Dispatcher {
 	 *
 	 * @return int|array
 	 */
-	public function triggered($tag = null);
-
-
+	public function emitted($tag = null);
 
 	/**
 	 * Get the number of times an action has been triggered or an array of all triggered actions if none is given.
