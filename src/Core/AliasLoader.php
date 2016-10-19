@@ -95,9 +95,12 @@ class AliasLoader
 		return false;
 	}
 
-	public function add(array $aliases, $force = false, $slient = true)
+	public function add($alias, $class = null, $force = false, $slient = true)
 	{
-		foreach ($aliases as $alias => $class) {
+		if(!is_array($alias))
+			return $this->alias($alias, $class, $force, $slient);
+
+		foreach ($alias as $alias => $class) {
 			$this->alias($alias, $class, $force, $slient);
 		}
 	}
@@ -105,7 +108,7 @@ class AliasLoader
 	public function set($aliases, $class = null)
 	{
 		$aliases = is_array($aliases) ? $aliases : [$aliases => $class];
-		return $this->add($aliases, true);
+		return $this->add($aliases, null, true);
 	}
 
 	public function has($alias)
@@ -117,6 +120,17 @@ class AliasLoader
 	{
 		$alias = $this->parseAlias($alias);
 		return isset($this->aliases[$alias]) ? $alias : value($default);
+	}
+
+	public function forget($aliases)
+	{
+		foreach ((array) $aliases as $alias) {
+
+			$alias = $this->parseAlias($alias);
+
+			if(isset($this->aliases[$alias]))
+				unset($this->aliases[$alias]);
+		}
 	}
 
 	/**

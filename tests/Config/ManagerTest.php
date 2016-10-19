@@ -105,8 +105,6 @@ class ManagerTest extends ServiceTestCase
 		$expected = 'filtered';
 		$original = 'original';
 		$this->config->filter('app.filtered', function($value, $config) use($original, $expected){
-			pprint('Filtering', current_filter());
-			pprint('Filtering', current_filter());
 			return $value === $original ? $expected : $value;
 		});
 

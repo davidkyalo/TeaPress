@@ -2,6 +2,7 @@
 
 namespace TeaPress\Signals\Traits;
 
+use Closure;
 use BadMethodCallException;
 use TeaPress\Contracts\Signals\Hub as HubContract;
 
@@ -10,9 +11,9 @@ trait Emitter {
 	// protected static $events_namespace;
 
 	/**
-	 * @var \TeaPress\Contracts\Signals\Hub
+	 * @var \Closure
 	 */
-	protected static $_signals_hub;
+	protected static $signals_hub;
 
 	/**
 	* Get the signals hub instance
@@ -21,8 +22,7 @@ trait Emitter {
 	*/
 	public static function getSignalsHub()
 	{
-		return isset( static::$signals_hub ) && static::$signals_hub
-				? static::$signals_hub : static::$_signals_hub;
+		return static::$signals_hub;
 	}
 
 	/**
@@ -34,7 +34,7 @@ trait Emitter {
 	*/
 	public static function setSignalsHub(HubContract $hub)
 	{
-		static::$_signals_hub = $hub;
+		static::$signals_hub = $hub;
 	}
 
 	/**

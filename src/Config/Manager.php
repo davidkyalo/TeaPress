@@ -55,6 +55,7 @@ class Manager extends NamespacedItemResolver implements Contract, Filterable, Ar
 	 * Create a new configuration repository.
 	 *
 	 * @param  \TeaPress\Config\LoaderInterface  $loader
+	 * @param  \TeaPress\Contracts\Signals\Hub  $signals
 	 * @param  string|array|null  $paths
 	 * @return void
 	 */

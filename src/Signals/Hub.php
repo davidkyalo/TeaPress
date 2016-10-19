@@ -71,9 +71,9 @@ class Hub implements Contract {
 	{
 		$this->container = $container;
 
-		$this->registerAllActionHook();
-
 		Emitter::setSignalsHub($this);
+
+		$this->registerAllActionHook();
 	}
 
 	/**
@@ -194,7 +194,7 @@ class Hub implements Contract {
 	 */
 	public function didFilter($tag = null)
 	{
-		return $this->evaluated($tag);
+		return $this->filtered($tag);
 	}
 
 	/**
@@ -204,7 +204,7 @@ class Hub implements Contract {
 	 *
 	 * @return int|array
 	 */
-	public function triggered($tag = null)
+	public function emitted($tag = null)
 	{
 		global $wp_actions;
 
@@ -224,7 +224,7 @@ class Hub implements Contract {
 	 */
 	public function didAction($tag = null)
 	{
-		return $this->triggered($tag);
+		return $this->emitted($tag);
 	}
 
 	/**

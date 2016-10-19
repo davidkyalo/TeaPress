@@ -2,6 +2,7 @@
 namespace TeaPress\Tests\Signals;
 
 use TeaPress\Utils\Arr;
+use TeaPress\Utils\Str;
 use TeaPress\Signals\Hub;
 use TeaPress\Tests\Base\ServiceTestCase;
 
@@ -53,10 +54,13 @@ class DispatcherTest extends ServiceTestCase
 
 	public function testFire()
 	{
-		$benckmark = function()
+		$tag = $this->methodTag(__METHOD__);
+
+		$benckmark = function() use($tag)
 		{
 			global $wp_filter, $wp_actions, $executions;
 
+			$test_tag = $tag;
 
 			$col_w = 44;
 			$row_h = 1;
@@ -66,7 +70,7 @@ class DispatcherTest extends ServiceTestCase
 
 			$cell = function($text, $num = 0, $pad_char = null) use($col_w, &$row_h, $colpad){
 
-				$chunks = str_split($text, (strlen($text) <= $col_w ? $col_w : $col_w - 3) );
+				$chunks = str_split($text, (Str::length($text) <= $col_w ? $col_w : $col_w - 4) );
 				$row_h = count($chunks);
 				if(is_null($pad_char))
 					$pad_char = $colpad;
@@ -75,9 +79,9 @@ class DispatcherTest extends ServiceTestCase
 				$pad .= $num > 0 ? str_repeat( $pad_char, $num) : '';
 
 				foreach ($chunks as $key => &$chunk){
-
-					$chunk = $row_h > 1 && $key+1 < $row_h ? $chunk . "...\n" : $chunk;
-					$rpad = ($col_w - strlen($chunk)) > 1 ? str_repeat(' ', ($col_w - strlen($chunk))) : '';
+					$chunk = $pad_char . $chunk;
+					$chunk = $row_h > 1 && $key+1 < $row_h ?  $chunk . "...\n" : $chunk;
+					$rpad = ($col_w - Str::length($chunk)) > 1 ? str_repeat(' ', ($col_w - Str::length($chunk))) : '';
 
 					$chunk .=$rpad;
 					if( $key > 0 ){
@@ -94,7 +98,7 @@ class DispatcherTest extends ServiceTestCase
 				$char = is_null($char) ? $line_char : $char;
 				$text = str_repeat( $char, $col_w );
 				for ($i=0; $i < $ncols ; $i++) {
-					$cells[] = $cell( $text, $i );
+					$cells[] = $cell( $text, $i, '-');
 				}
 
 				$e = str_repeat( "\n", 1);
@@ -128,7 +132,8 @@ class DispatcherTest extends ServiceTestCase
 				$total += $hooked;
 				$actions[$tag] = isset($actions[$tag]) ? $actions[$tag] + $hooked : $hooked;
 			}
-			$top = 100;
+
+			$top = 10;
 
 			arsort($actions);
 			arsort($executions);
@@ -137,11 +142,11 @@ class DispatcherTest extends ServiceTestCase
 			// pprint("Top {$top} Hooks", array_slice($actions, 0,$top, true));
 
 			echo "\n".$line(3);
-			echo " ".$row("  Name  ", "  # Hooks  ", "  # Calls  ");
+			echo "".$row("  Name  ", "  # Hooks  ", "  # Calls  ");
 
 			foreach (array_slice($actions, 0 , $top, true) as $k => $h) {
 				$calls = !isset($executions[$k]) ? 0 : $executions[$k];
-				echo " ".$row( $k, $h, $calls );
+				echo "".$row( $k, $h, $calls );
 			}
 
 			echo "\n".$line(3);
@@ -155,18 +160,17 @@ class DispatcherTest extends ServiceTestCase
 			// pprint("Top {$top} Calls", array_slice($executions, 0,$top, true));
 
 			echo "\n".$line(3);
-			echo " ".$row("  Name  ", "  # Calls  ", "  # Hooks  ");
+			echo "".$row("  Name  ", "  # Calls  ", "  # Hooks  ");
 
 			foreach (array_slice($executions, 0 , $top, true) as $k => $calls) {
 				$h = !isset($actions[$k]) ? 0 : $actions[$k];
-				echo " ".$row( $k, $calls, $h );
+				echo "".$row( $k, $calls, $h );
 			}
 			echo "\n".$line(3);
 			pprint('Total Calls', array_sum($executions));
 			pprint('Average Calls', number_format( (array_sum($executions)/count($executions) ),4 ) );
 			pprint('All Average', number_format( (array_sum($executions)/count($actions) ), 4 ) );
-
-			echo $line(3);
+			echo "\n";
 			echo $line(3);
 			echo "\n";
 
@@ -178,9 +182,6 @@ class DispatcherTest extends ServiceTestCase
 		// add_action('shutdown', $benckmark, 9999);
 
 
-
-
-		$tag = $this->methodTag(__METHOD__);
 
 		$value = 0;
 
@@ -196,7 +197,7 @@ class DispatcherTest extends ServiceTestCase
 
 		$meths = ['listen' => false, 'bindWeak' => true];
 		foreach ($meths as $meth => $weak) {
-			for ($i=1; $i<=10000; $i++) {
+			for ($i=1; $i<=1000; $i++) {
 				// $inc = $i * (1;
 				if(!$weak)
 					$expected[] = $i;
