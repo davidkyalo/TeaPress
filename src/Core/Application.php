@@ -5,7 +5,6 @@ namespace TeaPress\Core;
 use TeaPress\Utils\Arr;
 use BadMethodCallException;
 use UnexpectedValueException;
-use TeaPress\Config\ConfigKernel;
 use TeaPress\Signals\SignalsKernel;
 use TeaPress\Contracts\Core\Application as Contract;
 use TeaPress\Contracts\Core\Manifest as ManifestContract;
@@ -273,53 +272,62 @@ class Application extends Container implements Contract
 	protected function registerBaseKernels()
 	{
 		$this->register(new SignalsKernel($this, null));
-		$this->register(new ConfigKernel($this, $this->signals));
 	}
 
 	/**
-	 * Register all of the configured providers.
+	 * Register all of the booted kernels.
 	 *
 	 * @return void
 	 */
-	public function registerConfiguredKernels()
+	public function registerBootedKernels()
 	{
 		$manifestKey = $this->getCachedKernelsKey();
-		(new KernelLoader($this, $manifestKey))->load($this->config['app.kernels']);
+		(new KernelLoader($this, $manifestKey))->load( array_keys($this->bootedKernels) );
 	}
 
 	/**
 	* Register a kernel with the application.
 	*
-	* @param  string|array|\TeaPress\Core\Kernel  $kernels
+	* @param  string|\TeaPress\Core\Kernel|array  $kernel
 	* @param  array  $options
 	* @param  bool   $force
 	*
-	* @return void
+	* @return \TeaPress\Core\Kernel|array
 	*/
-	public function register($kernels, array $options = [], $force = false)
+	public function register($kernel, array $options = [], $force = false)
 	{
-		foreach ( (array) $kernels as $kernel) {
+		if(is_array($kernel)){
+			$kernels = [];
+			foreach ($kernel as $k) {
+				$kernels[] = $this->register($k, $options, $force);
+				$options = [];
+			}
+
+			return $kernels;
+		}
+
+		$instance = $this->kernel($kernel);
+
+		if($force || !$this->kernelIsRegistered($kernel)){
 
 			if(!$this->kernelIsBooted($kernel)){
 				$this->bootKernel($kernel);
 			}
 
-			if($force || !$this->kernelIsRegistered($kernel)){
+			$instance->register();
 
-				$this->kernel($kernel)->register();
-
-				foreach ($options as $key => $value) {
-					$this[$key] = $value;
-				}
-
-				$this->markAsRegistered($kernel);
+			foreach ($options as $key => $value) {
+				$this[$key] = $value;
 			}
 
-			if($this->running){
-				$this->runKernel($kernel);
-			}
+			$this->markAsRegistered($kernel);
 		}
 
+		if($this->isRunning()){
+			$this->runKernel($kernel);
+		}
+
+		return $instance;
 	}
 
 	/**
@@ -507,6 +515,10 @@ class Application extends Container implements Contract
 	{
 		if($this->running) return;
 
+		if(!$this->booted){
+			throw new BadMethodCallException("Error Running Application. Application not booted.");
+		}
+
 		$this->fireAppCallbacks('before_running');
 
 		$this->runKernels( array_keys( $this->registeredKernels ) );
@@ -657,26 +669,6 @@ class Application extends Container implements Contract
 		$this->signals->emit([$this, $event], $this);
 	}
 
-
-	/**
-	 * Run the application.
-	 *
-	 * @return void
-	 */
-	public function run()
-	{
-		if ($this->running) return;
-
-		if(!$this->booted)
-			throw new BadMethodCallException("Error Running Application. Application not booted.");
-
-		foreach ($this->kernels() as $kernel) {
-			$this->runKernel($kernel);
-		}
-
-		$this->running = true;
-	}
-
 	/**
 	* Alias a type to a different name.
 	*
@@ -755,8 +747,9 @@ class Application extends Container implements Contract
 	 */
 	public function registerDeferredKernel($kernel, $service = null)
 	{
-		if ($service)
+		if ($service){
 			unset($this->deferredServices[$service]);
+		}
 
 		$this->register($kernel);
 	}
