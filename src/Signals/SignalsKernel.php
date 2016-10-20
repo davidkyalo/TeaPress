@@ -2,6 +2,7 @@
 namespace TeaPress\Signals;
 
 use TeaPress\Core\Kernel;
+use TeaPress\Signals\Traits\Online;
 
 class SignalsKernel extends Kernel
 {
@@ -9,7 +10,8 @@ class SignalsKernel extends Kernel
 
 	public function register()
 	{
-		$this->app->instance('signals', new Hub($this->app));
+		$this->app->instance('signals', $hub = new Hub($this->app));
+		Online::setSignals($hub);
 	}
 
 

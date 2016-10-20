@@ -6,6 +6,23 @@ use Illuminate\Support\Str as Base;
 
 class Str extends Base {
 
+	public static function compact($text, $whitespace = ' ')
+	{
+		return  trim( preg_replace('/\s+/', $whitespace, $text) );
+	}
+
+	public static function minify($text, $linesep = ' ',  $whitespace = ' ')
+	{
+		$search = ["\r\n", "\n", "\r"];
+		$replace = array_fill( 0, count($search), $linesep);
+		$service[] = "\t";
+		$replace[] = " ";
+
+		$text = str_replace($search, $replace, $text);
+
+		return static::compact($text, $whitespace);
+	}
+
 	public static function slug($title, $separator = '-', $remove_invalid = true, $preserve_case = false)
 	{
 		$title = static::ascii($title);
@@ -25,6 +42,8 @@ class Str extends Base {
 
 		return trim($title, $separator);
 	}
+
+
 
 	public static function phrase($text, $separator = ' '){
 		$text = static::slug($text, '_', false, true);

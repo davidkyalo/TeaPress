@@ -7,6 +7,34 @@ use PHPUnit_Framework_TestCase;
 
 class StrTest extends PHPUnit_Framework_TestCase
 {
+	public function testCompact()
+	{
+		$str = "My   name    is Big           Space       ";
+		$this->assertEquals( 'My name is Big Space', Str::compact($str) );
+	}
+
+
+	public function testCompactNoSpace()
+	{
+		$str = "My   name    is Big           Space       ";
+		$this->assertEquals( 'MynameisBigSpace', Str::compact($str, '') );
+	}
+
+
+	public function testCompactUnicode()
+	{
+		$str = "My   name    is  \xa0-   Big         Space       ";
+		$this->assertEquals( "My name is \xa0- Big Space", Str::compact($str) );
+	}
+
+
+	public function testMinify()
+	{
+		$str = "Hello!\nMy   name    is \r\n\tBig         Space.   \n Thanks    ";
+		$this->assertEquals( "Hello! My name is Big Space. Thanks", Str::minify($str) );
+	}
+
+
 
 	public function testPadByAppend()
 	{

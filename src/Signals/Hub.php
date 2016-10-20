@@ -6,17 +6,23 @@ use TeaPress\Utils\Arr;
 use TeaPress\Utils\Str;
 use BadMethodCallException;
 use InvalidArgumentException;
-use TeaPress\Signals\Traits\Emitter;
 use TeaPress\Utils\Traits\Extendable;
 use TeaPress\Contracts\Core\Container;
 use TeaPress\Contracts\Signals\Hub as Contract;
 
 
-class Hub implements Contract {
+class Hub implements Contract
+{
 
 	use Extendable;
 
 	const NO_RESPONSE = NOTHING;
+
+	const ACTION = 'ACTION';
+
+	const FILTER = 'FILTER';
+
+	const WILDCARD = 'WILDCARD';
 
 	/**
 	 * @var \TeaPress\Contracts\Core\Container
@@ -31,12 +37,19 @@ class Hub implements Contract {
 	/**
 	 * @var array
 	 */
-	protected $evaluated = [];
+	protected $filters = [];
 
 	/**
 	 * @var array
 	 */
 	protected $wrappers = [];
+
+	/**
+	 * The wildcard listeners.
+	 *
+	 * @var array
+	 */
+	protected $wildcards = [];
 
 	/**
 	 * @var array
@@ -71,8 +84,6 @@ class Hub implements Contract {
 	{
 		$this->container = $container;
 
-		Emitter::setSignalsHub($this);
-
 		$this->registerAllActionHook();
 	}
 
@@ -92,10 +103,10 @@ class Hub implements Contract {
 			if(array_key_exists($tag, $wp_actions))
 				return;
 
-			if(!isset($this->evaluated[$tag]))
-				$this->evaluated[$tag] = 1;
+			if(!isset($this->filters[$tag]))
+				$this->filters[$tag] = 1;
 			else
-				++$this->evaluated[$tag];
+				++$this->filters[$tag];
 
 		}, 0);
 	}
@@ -120,9 +131,11 @@ class Hub implements Contract {
 	 */
 	public function currentAction()
 	{
-		return $this->current();
+		foreach ( array_reverse($this->active()) as $tag) {
+			if($this->didAction($tag))
+				return $tag;
+		}
 	}
-
 
 	/**
 	 * Get the current filter.
@@ -131,7 +144,30 @@ class Hub implements Contract {
 	 */
 	public function currentFilter()
 	{
-		return $this->current();
+		foreach ( array_reverse($this->active()) as $tag) {
+			if($this->didFilter($tag))
+				return $tag;
+		}
+	}
+
+	/**
+	 * Get the current filter.
+	 *
+	 * @return string|null
+	 */
+	public function getType($tag = null)
+	{
+		$tag = is_null($tag) ? $this->current() : $this->getTag($tag);
+
+		// if($tag && $this->isWildcard($tag))
+		if($tag && isset($this->wildcards[$tag]))
+			return static::WILDCARD;
+		elseif($tag && $this->didFilter($tag) )
+			return static::FILTER;
+		elseif($tag && $this->didAction($tag) )
+			return static::ACTION;
+		else
+			return false;
 	}
 
 	/**
@@ -156,9 +192,8 @@ class Hub implements Contract {
 	 */
 	public function isCurrentAction($tag)
 	{
-		return $this->isCurrent($tag);
+		return $this->isCurrent($tag) && $this->getType($tag) === static::ACTION;
 	}
-
 
 	/**
 	 * Determine if the given filter hook is the current
@@ -169,7 +204,7 @@ class Hub implements Contract {
 	 */
 	public function isCurrentFilter($tag)
 	{
-		return $this->isCurrent($tag);
+		return $this->isCurrent($tag) && $this->getType($tag) === static::FILTER;
 	}
 
 	/**
@@ -181,7 +216,7 @@ class Hub implements Contract {
 	 */
 	public function filtered($tag = null)
 	{
-		return is_null($tag) ? $this->evaluated : Arr::get($this->evaluated, $this->getTag($tag), 0);
+		return is_null($tag) ? $this->filters : Arr::get($this->filters, [$this->getTag($tag), '->->'], 0);
 	}
 
 
@@ -211,7 +246,7 @@ class Hub implements Contract {
 		if(is_null($tag))
 			return $wp_actions;
 
-		return Arr::get( $wp_actions, $this->getTag($tag), 0 );
+		return Arr::get( $wp_actions, [$this->getTag($tag), '->->'], 0 );
 	}
 
 
@@ -359,6 +394,10 @@ class Hub implements Contract {
 			$bindable = $this->getOrCreateWrapper($callback, $priority);
 		else
 			$bindable = $callback;
+
+		if ($this->isWildcard($tag)){
+			$this->addWildcard($tag);
+		}
 
 		add_filter( $tag, $bindable, $priority, $accepted_args );
 
@@ -600,6 +639,70 @@ class Hub implements Contract {
 
 
 	/**
+	* Execute wildcards. Calls all available wildcard callbacks for the given event.
+	*
+	* @param  array|string					$tag
+	* @param  array							$payload
+	*
+	* @return void
+	*/
+	protected function callWildcards($tag, array $payload = [], $type = false)
+	{
+		global $wp_filter, $merged_filters, $wp_current_filter;
+
+		if(empty($this->wildcards))
+			return;
+
+		//Set the current real event tag since it had been popped.
+		$wp_current_filter[] = $tag;
+
+		if( $this->stacksResponses($type) ){
+			$payload[] = $this->response($tag);
+		}
+
+		$toempty = [];
+
+		reset( $this->wildcards );
+
+		do {
+
+			$wildcard = current($this->wildcards);
+			if( !Str::is($wildcard, $tag) ){
+				continue;
+			}
+
+			//In case this wildcard has no bound callbacks, mark for emptying and skip to the next.
+			if ( !isset($wp_filter[$wildcard]) ){
+				$toempty[] = $wildcard;
+				continue;
+			}
+
+			// Sort.
+			if ( !isset( $merged_filters[ $wildcard ] ) ) {
+				ksort($wp_filter[$wildcard]);
+				$merged_filters[ $wildcard ] = true;
+			}
+
+			reset( $wp_filter[ $wildcard ] );
+
+			do {
+				foreach ( (array) current($wp_filter[$wildcard]) as $the_ )
+					if ( !is_null($the_['function']) )
+						call_user_func_array( $the_['function'], $payload );
+
+			} while ( next($wp_filter[$wildcard]) !== false );
+
+
+		} while ( next( $this->wildcards ) !== false );
+
+		//Pop out the current event
+		array_pop($wp_current_filter);
+
+	}
+
+
+
+	/**
 	* Execute callbacks hooked the specified action.
 	*
 	* Calls the do_action_ref_array() wordpress function with $payload as $args.
@@ -620,7 +723,10 @@ class Hub implements Contract {
 
 		do_action_ref_array($tag, $payload);
 
+		$this->callWildcards($tag, $payload, static::ACTION );
+
 		return $this->afterDoAction($tag);
+
 	}
 
 
@@ -677,6 +783,11 @@ class Hub implements Contract {
 		}
 
 		$response = apply_filters_ref_array($tag, $payload);
+
+		$payload = array_values($payload);
+		$payload[0] = $response;
+
+		$this->callWildcards($tag, $payload, static::FILTER );
 
 		return $this->afterApplyFilters($tag, $response);
 	}
@@ -774,6 +885,53 @@ class Hub implements Contract {
 	{
 		return $this->getCallbacks($tag, $sorted, true);
 	}
+
+
+	/**
+	* Get an array of all the bound callbacks for the given hook grouped by priority unless merged is true.
+	*
+	* @param  string|array 	$tag
+	* @param  bool			$sorted
+	* @param  bool			$merged
+	*
+	* @return array
+	*/
+	// public function getHandlers($tag, $sorted=true, $merged=false)
+	// {
+	// 	global $wp_filter, $merged_filters;
+
+	// 	$tag = $this->getTag($tag);
+
+	// 	if ( !isset($wp_filter[$tag]) )
+	// 		return [];
+
+	// 	$copy = $wp_filter[$tag];
+
+	// 	if( $sorted && !isset($merged_filters[$tag]) )
+	// 		ksort($copy);
+
+	// 	$callbacks = [];
+	// 	foreach ($copy as $pr => $cbs) {
+	// 		foreach ( (array) $cbs as $cb) {
+	// 			$callback = [
+	// 					'callback' 		=> $cb['function'] instanceof Handler
+	// 							? $cb['function']->getCallback() : $cb['function'],
+	// 					'priority' 		=> $pr,
+	// 					'handler' => $cb['function'],
+	// 					'accepted_args' => $cb['accepted_args']
+	// 				];
+
+
+	// 			if($merged)
+	// 				$callbacks[] = $callback;
+	// 			else
+	// 				$callbacks[$pr][] = $callback;
+	// 		}
+	// 	}
+	// 	return $callbacks;
+	// }
+
+
 
 /* Illuminate\Contracts\Events\Dispatcher */
 
@@ -880,6 +1038,18 @@ class Hub implements Contract {
 	}
 
 	/**
+	* Get the number of times an event has been triggered or an array of all triggered events if none is given.
+	*
+	* @param  array|string|null		$tag
+	*
+	* @return int|array
+	*/
+	public function fired($tag = null)
+	{
+		return $this->emitted($tag);
+	}
+
+	/**
 	 * Remove a set of listeners from the dispatcher.
 	 *
 	 * @param  string  $event
@@ -909,9 +1079,37 @@ class Hub implements Contract {
 	 */
 	public function responses($tag = null, $default = [])
 	{
-		if(!is_null($tag)) $tag = $this->getTag($tag);
+		if(is_null($tag))
+			return $this->responses;
+
+		$tag = $this->getTag($tag);
+
 		// return Arr::get($this->responses, $tag, $default, '->->');
-		return Arr::get($this->responses, [$tag, '->->'], $default);
+		// return Arr::get($this->responses, [$tag, '->->'], $default);
+		return isset($this->responses[$tag]) ? $this->responses[$tag] : value($default);
+	}
+
+	/**
+	 * Get the responses of the given event
+	 *
+	 * @return mixed|array|null
+	 */
+	public function response($tag, $default = NOTHING)
+	{
+		// return Arr::get($this->responses, $tag, $default, '->->');
+		// return Arr::get($this->responses, [$tag, '->->'], $default);
+
+		// if(!$this->stacksResponses( $this->getType($tag) ))
+		// 	return;
+
+		$halt = $this->halting($tag);
+
+		if($default === NOTHING)
+			$default = $halt ? null : [];
+
+		$all = $this->responses($tag, $default);
+
+		return $halt && is_array($all) ?  Arr::last($all, null, $default) : $all;
 	}
 
 	/**
@@ -921,9 +1119,13 @@ class Hub implements Contract {
 	 */
 	public function halting($tag = null)
 	{
-		if(!is_null($tag)) $tag = $this->getTag($tag);
+		if(is_null($tag))
+			return $this->halting;
+
+		$tag = $this->getTag($tag);
 		// return Arr::get($this->halting, $tag, false, '->->');
-		return Arr::get($this->halting, [$tag, '->->'], false);
+		// return Arr::get($this->halting, [$tag, '->->'], false);
+		return isset($this->halting[$tag]) ? $this->halting[$tag] : false;
 	}
 
 	/**
@@ -941,6 +1143,55 @@ class Hub implements Contract {
 		return $subscriber;
 	}
 
+	/**
+	 * Determine whether the given tag is a wildcard.
+	 *
+	 * @param  string  $tag
+	 *
+	 * @return bool
+	 */
+	protected function isWildcard($tag)
+	{
+		return Str::contains($tag, '*');
+	}
+
+	/**
+	 * Registers a wildcard tag.
+	 *
+	 * @param  string  $tag
+	 *
+	 * @return void
+	 */
+	protected function addWildcard($tag)
+	{
+		if(!in_array($tag, $this->wildcards))
+			$this->wildcards[] = $tag;
+	}
+
+
+	/**
+	 * Get the matching wildcard tags for the event.
+	 *
+	 * @param  string|null  $tag
+	 *
+	 * @return array
+	 */
+	protected function wildcards($tag = null)
+	{
+		if(is_null($tag))
+			return $this->wildcards;
+
+		$wildcards = [];
+
+		foreach ($this->wildcards as $wildcard) {
+			if ( $wildcard !== $tag && Str::is($wildcard, $tag) ) {
+				$wildcards[] = $wildcard;
+			}
+		}
+
+		return $wildcards;
+	}
+
 
 /* End Illuminate\Contracts\Events\Dispatcher */
 
@@ -954,7 +1205,8 @@ class Hub implements Contract {
 	protected function beforeApplyFilters($tag, array $payload)
 	{
 		$this->unbindFlushedCallbacks($tag);
-		$this->prepareSignal($tag, Arr::first($payload), false);
+		// $this->prepareSignal($tag, Arr::first($payload), false);
+		$this->prepareSignal($tag, null, false);
 		return true;
 	}
 
@@ -972,14 +1224,14 @@ class Hub implements Contract {
 
 	protected function prepareSignal($tag, $item = null, $halt = false)
 	{
-		$this->responses[$tag] = [$item];
+		$this->responses[$tag] = (array) $item;
 		$this->halting[$tag] = $halt;
 	}
 
 	protected function terminateSignal($tag, $response = self::NO_RESPONSE)
 	{
 		if($response === self::NO_RESPONSE){
-			array_shift($this->responses[$tag]);
+			// array_shift($this->responses[$tag]);
 			$response = $this->halting[$tag]
 					? Arr::last($this->responses[$tag])
 					: $this->responses[$tag];
@@ -994,7 +1246,7 @@ class Hub implements Contract {
 	public function currentSignal()
 	{
 		$signal = $this->current();
-		return [ $signal, ( $signal && isset($this->responses[$signal]) ) ];
+		return [ $signal, $this->getType($signal), ( $signal && isset($this->responses[$signal]) ) ];
 	}
 
 
@@ -1299,17 +1551,35 @@ class Hub implements Contract {
 		};
 	}
 
+	/**
+	 * Determine whether the given event type should stack responses.
+	 *
+	 * @param  string  $eventType
+	 *
+	 * @return bool
+	 */
+	protected function stacksResponses($eventType)
+	{
+		return $eventType === static::ACTION;
+	}
+
 	public function invokeCallback($callback, $parameters, $priority)
 	{
+		list($signal, $type, $emitting) = $this->currentSignal();
 
-		list($signal, $emitting) = $this->currentSignal();
+		$stackResponses = $this->stacksResponses($type);
 
-		$response = $emitting ? Arr::last($this->responses[$signal]) : null;
+		$response = $emitting && $stackResponses ? Arr::last($this->responses[$signal]) : null;
 
-		if($emitting && (!$this->halting[$signal] || is_null($response)) ){
-			$this->responses[$signal][] = $response = call_user_func_array( $this->getCallable($callback), $parameters );
+		if($stackResponses && $emitting && (!$this->halting[$signal] || is_null($response)) ){
+			// $this->responses[$signal][] = $response = call_user_func_array( $this->getCallable($callback), $parameters );
+			$response = call_user_func_array( $this->getCallable($callback), $parameters );
+
+			if(!is_null($response)) //
+				$this->responses[$signal][] = $response; //
+
 		}
-		elseif (!$emitting) {
+		elseif (!$stackResponses || !$emitting) {
 			$response = call_user_func_array( $this->getCallable($callback), $parameters );
 		}
 

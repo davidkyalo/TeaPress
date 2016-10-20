@@ -204,7 +204,6 @@ class HubTest extends ServiceTestCase
 		$this->assertEquals(6, $this->signals->filter( $tag, 3, 'multiply', 2) );
 	}
 
-
 	public function testIsDoing()
 	{
 		$tag = $this->methodTag(__METHOD__);

@@ -2,13 +2,15 @@
 namespace TeaPress\Core;
 
 use Closure;
-use TeaPress\Contracts\Signals\Hookable;
-use TeaPress\Signals\Traits\Hookable as HookableTrait;
+use TeaPress\Contracts\Signals\Emitter;
+use TeaPress\Contracts\Signals\Hub as Signals;
+use TeaPress\Signals\Traits\Emitter as EmitterTrait;
 use TeaPress\Contracts\Core\Container as ContainerContract;
 
-abstract class Kernel implements Hookable
+abstract class Kernel implements Emitter
 {
-	use HookableTrait;
+	use EmitterTrait;
+
 	/**
 	 * @var \TeaPress\Contracts\Core\Container
 	 */
@@ -24,17 +26,14 @@ abstract class Kernel implements Hookable
 	 * Creates the kernel instance.
 	 *
 	 * @param \TeaPress\Contracts\Core\Container $app
-	 * @param \TeaPress\Contracts\Signals\Hub $signals
 	 *
 	 * @return void
 	 */
-	public function __construct(ContainerContract $app)
+	public function __construct(ContainerContract $app )
 	{
 		$this->app = $app;
 
-		$this->signals = static::getSignalsHub();
-
-		$this->initialize();
+		$this->signals = static::getSignals();
 	}
 
 	/**
@@ -190,7 +189,16 @@ abstract class Kernel implements Hookable
 	 */
 	public function when()
 	{
-		return [];
+		return [
+			[
+				[$this, 'booted', 24],
+				[$this, 'boot'],
+				[$this, 'boot'],
+				['init' => -900],
+				'init',
+				'init|1'
+			];
+		];
 	}
 
 	/**

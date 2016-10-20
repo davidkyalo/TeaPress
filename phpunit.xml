@@ -12,16 +12,16 @@
 			debug="true"
 			bootstrap="./tests/bootstrap.php">
 	<testsuites>
+		<testsuite name="signals">
+			<directory>./tests/Signals/</directory>
+		</testsuite>
+
 		<testsuite name="filesystem">
 			<directory>./tests/Filesystem/</directory>
 		</testsuite>
 
 		<testsuite name="config">
 			<directory>./tests/Config/</directory>
-		</testsuite>
-
-		<testsuite name="signals">
-			<directory>./tests/Signals/</directory>
 		</testsuite>
 
 		<testsuite name="database">
@@ -39,6 +39,5 @@
 		<testsuite name="utils.str">
 			<file>./tests/Utils/StrTest.php</file>
 		</testsuite>
-
 	</testsuites>
 </phpunit>

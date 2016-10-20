@@ -61,7 +61,7 @@ if(!function_exists('pprint')){
 			$out .= var_export($v, true);
 			// var_dump($v);
 		}
-		$out .= ";    ";
+		$out .= "\n";
 		// $out .= "\n";
 		echo $out;
 	}

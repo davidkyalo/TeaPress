@@ -2,7 +2,7 @@
 namespace TeaPress\Tests\Signals;
 
 use TeaPress\Signals\Hub;
-use TeaPress\Signals\Traits\Emitter;
+use TeaPress\Signals\Traits\Online;
 use TeaPress\Tests\Base\TestKernel;
 use TeaPress\Tests\Signals\Mocks\HookableService;
 
@@ -40,6 +40,6 @@ class Kernel extends TestKernel
 
 	public function boot()
 	{
-		Emitter::setSignalsHub($this->app['signals']);
+		Online::setSignals($this->app['signals']);
 	}
 }

@@ -1,24 +1,7 @@
 <?php
 namespace TeaPress\Contracts\Signals;
 
-interface Emitter {
-
-	/**
-	* Get the hooks hub instance
-	*
-	* @return \TeaPress\Contracts\Signals\Hub
-	*/
-	public static function getSignalsHub();
-
-	/**
-	* Set the hooks hub instance
-	*
-	* @param  \TeaPress\Contracts\Signals\Hub		$hub
-	*
-	* @return void
-	*/
-	public static function setSignalsHub(Hub $hub);
-
+interface Emitter extends Online {
 
 	/**
 	* Get this emitter's events namespace.

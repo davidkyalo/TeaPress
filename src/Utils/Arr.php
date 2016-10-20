@@ -8,6 +8,24 @@ class Arr extends BaseArr
 {
 
 	/**
+	 * Determine if the given array contains any of the given keys.
+	 *
+	 * @param  array   $array
+	 * @param  string|array  $keys
+	 * @param  string  $notation='.'
+	 *
+	 * @return bool
+	 */
+	public static function any($array, $keys, $notation = NOTHING)
+	{
+		foreach ( (array) $keys as $key) {
+			if(static::has($array, $key, $notation))
+				return true;
+		}
+		return false;
+	}
+
+	/**
 	 * Add an element to an array using the given notation if it doesn't exist.
 	 * Uses the "dot" notation by default.
 	 *

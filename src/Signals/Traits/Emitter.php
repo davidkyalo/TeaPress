@@ -6,36 +6,9 @@ use Closure;
 use BadMethodCallException;
 use TeaPress\Contracts\Signals\Hub as HubContract;
 
-trait Emitter {
-
-	// protected static $events_namespace;
-
-	/**
-	 * @var \Closure
-	 */
-	protected static $signals_hub;
-
-	/**
-	* Get the signals hub instance
-	*
-	* @return \TeaPress\Contracts\Signals\Hub
-	*/
-	public static function getSignalsHub()
-	{
-		return static::$signals_hub;
-	}
-
-	/**
-	* Set the signals hub instance
-	*
-	* @param  \TeaPress\Contracts\Signals\Hub		$hub
-	*
-	* @return void
-	*/
-	public static function setSignalsHub(HubContract $hub)
-	{
-		static::$signals_hub = $hub;
-	}
+trait Emitter
+{
+	use Online;
 
 	/**
 	* Get this emitter's events namespace.
@@ -84,7 +57,7 @@ trait Emitter {
 	*/
 	protected static function bindCallback($hook, $callback, $priority = null, $accepted_args = null, $once = null)
 	{
-		if($hub = static::getSignalsHub()){
+		if($hub = static::getSignals()){
 			$hub->bind( static::getHookTag($hook), $callback, $priority, $accepted_args, $once);
 			return true;
 		}
@@ -104,7 +77,7 @@ trait Emitter {
 	*/
 	protected static function unbindCallback($hook, $callback, $priority = null)
 	{
-		if($hub = static::getSignalsHub()){
+		if($hub = static::getSignals()){
 			return $hub->unbind( static::getHookTag($hook), $callback, $priority);
 		}
 
@@ -121,7 +94,7 @@ trait Emitter {
 	//  */
 	// public function didAction($hook)
 	// {
-	// 	if($hub = static::getSignalsHub())
+	// 	if($hub = static::getSignals())
 	// 		return $hub->didAction( static::getHookTag( $hook ) );
 
 	// 	return 0;
@@ -136,7 +109,7 @@ trait Emitter {
 	//  */
 	// public function didFilter($hook)
 	// {
-	// 	if($hub = static::getSignalsHub())
+	// 	if($hub = static::getSignals())
 	// 		return $hub->didFilter( static::getHookTag( $hook ) );
 
 	// 	return 0;
@@ -153,7 +126,7 @@ trait Emitter {
 	*/
 	protected function emitSignal($hook, ...$payload)
 	{
-		if( $hub = static::getSignalsHub())
+		if( $hub = static::getSignals())
 		{
 			$tag = static::getHookTag($hook);
 
@@ -176,7 +149,7 @@ trait Emitter {
 	*/
 	protected function emitSignalUntil($hook, ...$payload)
 	{
-		if( $hub = static::getSignalsHub())
+		if( $hub = static::getSignals())
 		{
 			$tag = static::getHookTag($hook);
 
@@ -204,7 +177,7 @@ trait Emitter {
 	*/
 	protected function applyFilters($hook, $item = null, ...$payload)
 	{
-		if( $hub = static::getSignalsHub()){
+		if( $hub = static::getSignals()){
 
 			$tag = static::getHookTag($hook);
 

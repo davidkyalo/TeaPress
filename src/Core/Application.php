@@ -43,7 +43,17 @@ class Application extends Container implements Contract
 	/**
 	 * @var bool
 	 */
-	protected $bootstraped = false;
+	protected $ready = null;
+
+	/**
+	 * @var bool
+	 */
+	protected $hasBeenBootstrapped = false;
+
+	/**
+	 * @var array
+	 */
+	protected $bootstraped = [];
 
 	/**
 	 * @var array
@@ -204,36 +214,93 @@ class Application extends Container implements Contract
 		return $this->path('storage');
 	}
 
+	/**
+	 * Determine if the application is in debug mode.
+	 *
+	 * @return string
+	 */
+	public function debug()
+	{
+		$default = defined('WP_DEBUG') ? WP_DEBUG : false;
+		return $this->bound('config') ? $this->make('config')->get('app.debug', $default) : $default;
+	}
+
 /********* Path methods ********/
 
-	/**
-	* Bootstrap the application.
-	*
-	* @param  array  $bootstrapers
-	*
-	* @return static
-	*/
-	public function bootstrapWith(array $bootstrapers)
-	{
-		$this->bootstraped = true;
 
-		foreach ($bootstrapers as $bootstraper) {
-			$this->signals->fire('bootstrapping: '.$bootstrapper, [$this]);
+	/**
+	* Run the given array of bootstrap classes.
+	*
+	* @param  array  $bootstrappers
+	* @param  bool  $force
+	*
+	* @return void
+	*/
+	public function bootstrapWith($bootstrapers, $force = false)
+	{
+		$this->hasBeenBootstrapped = true;
+
+		foreach ((array) $bootstrapers as $bootstraper) {
+			$this['signals']->fire('bootstrapping: '.$bootstrapper, [$this]);
 
 			$this->make($bootstrapper)->bootstrap($this);
 
-			$this->signals->fire('bootstrapped: '.$bootstrapper, [$this]);
+			$this['signals']->fire('bootstrapped: '.$bootstrapper, [$this]);
 		}
 
 		return $this;
 	}
 
-	public function bootstrapOn($event, $priority = -9999)
+	/**
+	* Execute a bootstraper silently (without marking the application as bootstrapped before).
+	*
+	* @param  array  $bootstrapers
+	* @param  bool  $force
+	*
+	* @return void
+	*/
+	public function executeBootstraper($bootstraper, $force = false)
 	{
-		if($this->signals->emitted($event))
-			$this->bootstrap();
-		else
-			$this->signals->bind($event, [$this, 'bootstrap'], $priority);
+		if( ($ready = $this->isReady()) ){
+			trigger_error("It's a little bit too late to be bootstrapping the application ({$bootstrapper}).");
+		}
+
+		if( !$force && $this->bootstraped( $bootstrapper ) ){
+			return;
+		}
+
+		$this->make($bootstrapper)->bootstrap($this);
+
+		if(!$ready){
+			$this->bootstraped[$bootstrapper] = true;
+		}
+	}
+
+	/**
+	 * Determine if the given bootstrapper has been executed.
+	 * Returns all executed bootstrappers if none is specified.
+	 *
+	 * @param  string|null  $bootstraper
+	 *
+	 * @return bool|array
+	 */
+	public function bootstraped($bootstraper = null)
+	{
+		if(is_null($bootstrapper))
+			return $this->bootstraped;
+
+		return isset($this->bootstraped[$bootstrapper]);
+	}
+
+
+	/**
+	 * Determine if the application has been bootstrapped before.
+	 *
+	 * @return bool
+	 */
+	public function hasBeenBootstrapped()
+	{
+		return $this->hasBeenBootstrapped;
 	}
 
 	/**
@@ -243,8 +310,18 @@ class Application extends Container implements Contract
 	 */
 	public function registerBootedKernels()
 	{
-		$manifestKey = $this->getCachedKernelsKey();
-		(new KernelLoader($this, $manifestKey))->load( array_keys($this->bootedKernels) );
+		$this->createKernelLoader()->load( array_keys($this->bootedKernels) );
+	}
+
+
+	/**
+	 * Create a kernel loader instance.
+	 *
+	 * @return \TeaPress\Core\KernelLoader
+	 */
+	protected function createKernelLoader()
+	{
+		return new KernelLoader($this, $this->make('signals'), $this->getCachedKernelsKey());
 	}
 
 	/**
@@ -380,7 +457,8 @@ class Application extends Container implements Contract
 	 */
 	public function createKernel($kernel)
 	{
-		return new $kernel($this, ($this->bound('signals') ? $this->make('signals') : null) );
+		// return new $kernel($this, ($this->bound('signals') ? $this->make('signals') : null) );
+		return new $kernel($this);
 	}
 
 	/**
@@ -425,7 +503,9 @@ class Application extends Container implements Contract
 		$name = is_string($kernel) ? $kernel : get_class($kernel);
 
 		if($force || !$this->kernelIsBooted($name)){
-			$this->kernel($kernel)->boot();
+			$instance = $this->kernel($kernel);
+			$instance->boot();
+			$instance->registerAliases();
 		}
 
 		$this->bootedKernels[$name] = true;
@@ -602,8 +682,6 @@ class Application extends Container implements Contract
 			$this->fireAppCallbacks('running');
 	}
 
-
-
 	/**
 	* Bind the given callback to the specified $event.
 	*
@@ -629,6 +707,49 @@ class Application extends Container implements Contract
 	protected function fireAppCallbacks($event)
 	{
 		$this->signals->emit([$this, $event], $this);
+	}
+
+
+	/**
+	* Determine if the application has fully bootstrapped, running and ready.
+	*
+	* @return bool
+	*/
+	public function isReady()
+	{
+		return !is_null($this->ready) ? $this->ready : ( $this->isRunning() && $this->signals->fired('init') );
+	}
+
+	/**
+	* Mark the application as fully bootstrapped, running and ready.
+	*
+	* @param bool $ready
+	*
+	* @return void
+	*/
+	public function markAppAsReady()
+	{
+		if($this->ready) return;
+
+		$this->ready = true;
+		$this->fireAppCallbacks('ready');
+	}
+
+
+	/**
+	* Register a new "ready" listener.
+	*
+	* @param  mixed  $callback
+	* @param  int	$priority
+	*
+	* @return void
+	*/
+	public function whenReady($callback, $priority = null)
+	{
+		$this->bindAppCallback('ready', $callback, $priority, true);
+
+		if ($this->ready)
+			$this->fireAppCallbacks('ready');
 	}
 
 	/**
