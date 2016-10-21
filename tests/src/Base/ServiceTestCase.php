@@ -11,9 +11,23 @@ abstract class ServiceTestCase extends TestCase
 {
 	use AppTrait;
 
+	protected $container;
 	protected $serviceName;
 	protected $serviceClass;
 
+	/**
+	 * Constructs a test case with the given name.
+	 *
+	 * @param string $name
+	 * @param array  $data
+	 * @param string $dataName
+	 */
+	public function __construct(...$args)
+	{
+		parent::__construct(...$args);
+
+		$this->container = $this->getContainer();
+	}
 
 
 	protected function setUp()
@@ -43,7 +57,22 @@ abstract class ServiceTestCase extends TestCase
 
 	public function getService()
 	{
-		return $this->app($this->getServiceName());
+		return $this->makeTheService($this->getMakeServiceParameters() );
+	}
+
+	protected function makeTheService($parameters = [])
+	{
+		return $this->app($this->getServiceName(), $parameters);
+	}
+
+	protected function getContainer()
+	{
+		return $this->app();
+	}
+
+	protected function getMakeServiceParameters()
+	{
+		return [];
 	}
 
 	public function runRegisteredTest()
@@ -74,6 +103,9 @@ abstract class ServiceTestCase extends TestCase
 	{
 		if( in_array($key, [ $this->getServicePropertyName(), 'service']))
 			return $this->getService();
+
+		if($key === 'contaner')
+			return $this->getContainer();
 
 		throw new OutOfBoundsException("Property {$key} not defined");
 

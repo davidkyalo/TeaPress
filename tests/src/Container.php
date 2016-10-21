@@ -54,12 +54,11 @@ class Container extends BaseContainer
 	protected function registerApplicationService()
 	{
 
-		$this->instance('app', $this);
+		$this->instance('test.app', $this);
 
 		$aliases = [
-			'app' => [
-				ltrim(self::class, '\\'),
-				'TeaPress\Core\Container',
+			'test.app' => [
+				self::class,
 				'TeaPress\Contracts\Core\Container',
 				'Illuminate\Contracts\Container\Container',
 			]

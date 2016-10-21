@@ -39,5 +39,14 @@
 		<testsuite name="utils.str">
 			<file>./tests/Utils/StrTest.php</file>
 		</testsuite>
+
+		<testsuite name="core">
+			<directory>./tests/Core/</directory>
+		</testsuite>
+
+		<testsuite name="core.app">
+			<directory>./tests/Core/Application</directory>
+		</testsuite>
+
 	</testsuites>
 </phpunit>

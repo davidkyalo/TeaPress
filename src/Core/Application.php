@@ -80,7 +80,7 @@ class Application extends Container implements Contract
 	/**
 	 * @var array
 	 */
-	// protected $serviceAliases = [];
+	protected $deferredServices = [];
 
 	/**
 	 * Creates the application instance.
@@ -127,12 +127,7 @@ class Application extends Container implements Contract
 	protected function bindPathsInContainer($keys)
 	{
 		foreach ((array) $keys as $key) {
-			$abstract = "path.{$key}";
-
-			if($this->bound($abstract))
-				continue;
-
-			$this->bind($abstract, function($app) use (key){
+			$this->bindIf("path.{$key}", function($app) use ($key){
 				return $app->getPath($key, null);
 			});
 		}
@@ -145,17 +140,7 @@ class Application extends Container implements Contract
 	*/
 	public function setBasePath($path)
 	{
-		$this->basePath = $basePath;
-	}
-
-	/**
-	* Get the current application's base path.
-	*
-	* @return void
-	*/
-	public function basePath()
-	{
-		return $this->basePath;
+		$this->basePath = $path;
 	}
 
 	/**
@@ -214,6 +199,7 @@ class Application extends Container implements Contract
 	 * @param string $name
 	 *
 	 * @throws \InvalidArgumentException
+	 *
 	 * @return void
 	 */
 	public function addPath($key, $path, $name = null)
@@ -224,16 +210,16 @@ class Application extends Container implements Contract
 			return $this->setter($path, $name);
 		}
 
-		$paths = $this->getPath($key);
-
-		if(!is_array($paths)){
-			throw new InvalidArgumentException("Error adding path. Path {$key} does not allow multiple values");
+		if(!is_array( $this->getPath($key) )){
+			throw new InvalidArgumentException("Error adding path. Path '{$key}' is not an array by default.");
 		}
 
-		if($name)
-			Arr::set($paths, $name, $path);
+		$paths = $this->explicitPaths($key, []);
+
+		if( is_null($name) )
+			Arr::pushUnique($paths, null, $path );
 		else
-			$paths[] = $path;
+			Arr::set($paths, $name, $path);
 
 		$this->usePath($key, $paths);
 	}
@@ -251,7 +237,7 @@ class Application extends Container implements Contract
 		$getter = Str::camel("{$key}Path");
 
 		return method_exists($this, $getter)
-				? $this->getter() : $this->explicitPaths($key, $default);
+				? $this->$getter() : $this->explicitPaths($key, $default);
 	}
 
 
@@ -268,7 +254,7 @@ class Application extends Container implements Contract
 	}
 
 	/**
-	 * Get the base path of the Laravel installation.
+	 * Get the application's base path of installation.
 	 *
 	 * @return string
 	 */

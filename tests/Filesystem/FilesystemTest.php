@@ -24,9 +24,9 @@ class FilesystemTest extends ServiceTestCase
 	}
 
 	/**
-     * @expectedException TeaPress\Filesystem\FileNotFoundException
-     *
-     **/
+	* @expectedException TeaPress\Filesystem\FileNotFoundException
+	*
+	**/
 	public function testRequireMissingScriptException()
 	{
 		$path ='/x_x_x_x/some/fake/script.php';
