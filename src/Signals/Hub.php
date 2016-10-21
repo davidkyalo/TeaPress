@@ -37,6 +37,11 @@ class Hub implements Contract
 	/**
 	 * @var array
 	 */
+	protected $knownAbstracts = [];
+
+	/**
+	 * @var array
+	 */
 	protected $filters = [];
 
 	/**
@@ -352,13 +357,33 @@ class Hub implements Contract
 	 * Otherwise, the passed string value will be used.
 	 *
 	 * @param  object|string  $emitter
-	 * @param  string  $tag
+	 * @param  string 		  $tag
 	 *
 	 * @return string
 	 */
 	public function getEmitterTag($emitter, $tag)
 	{
-		return $this->container->getAlias(is_object($emitter) ? get_class($emitter) : $emitter ).':'.$tag;
+		return $this->getAbstract($emitter).':'.$tag;
+	}
+
+	/**
+	 * Tries to get the abstract name of the given emitter incase it's bound to the service container.
+	 * If the emitter is a known service it's real name is returned.
+	 * Else if an object is passed, it's class name will be returned.
+	 * Otherwise, the provided value is returned.
+	 *
+	 * @param  object|string  $emitter
+	 *
+	 * @return string
+	 */
+	public function getAbstract($emitter)
+	{
+		$name = is_object($emitter) ? get_class($emitter) : $emitter;
+
+		if( !isset($this->knownAbstracts[$name]) )
+			$this->knownAbstracts[$name] =  $this->container->getAlias($name);
+
+		return $this->knownAbstracts[$name];
 	}
 
 	/**

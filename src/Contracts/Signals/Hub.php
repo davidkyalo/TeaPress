@@ -171,6 +171,18 @@ interface Hub extends Dispatcher {
 
 
 	/**
+	 * Tries to get the abstract name of the given emitter incase it's bound to the service container.
+	 * If the emitter is a known service it's real name is returned.
+	 * Else if an object is passed, it's class name will be returned.
+	 * Otherwise, the provided value is returned.
+	 *
+	 * @param  object|string  $emitter
+	 *
+	 * @return string
+	 */
+	public function getAbstract($emitter);
+
+	/**
 	* Bind the given callback to the specified $event.
 	*
 	* @param  array|string					$tag

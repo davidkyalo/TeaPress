@@ -218,7 +218,7 @@ class KernelLoader
 	 */
 	public function shouldRecompile($manifest, $kernels)
 	{
-		return $this->app->debug() || is_null($manifest) || $manifest['kernels'] != $kernels;
+		return $this->app->isDebug() || is_null($manifest) || $manifest['kernels'] != $kernels;
 	}
 
 	/**

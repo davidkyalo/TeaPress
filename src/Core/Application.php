@@ -2,8 +2,10 @@
 
 namespace TeaPress\Core;
 
+use TeaPress\Utils\Str;
 use TeaPress\Utils\Arr;
 use BadMethodCallException;
+use InvalidArgumentException;
 use UnexpectedValueException;
 use TeaPress\Signals\SignalsKernel;
 use TeaPress\Contracts\Core\Application as Contract;
@@ -26,11 +28,6 @@ class Application extends Container implements Contract
 	protected $basePath;
 
 	/**
-	 * @var string
-	 */
-	protected $configPath;
-
-	/**
 	 * @var bool
 	 */
 	protected $booted = false;
@@ -46,6 +43,11 @@ class Application extends Container implements Contract
 	protected $ready = null;
 
 	/**
+	 * @var array
+	 */
+	protected $explicitPaths = [];
+
+	/**
 	 * @var bool
 	 */
 	protected $hasBeenBootstrapped = false;
@@ -53,7 +55,7 @@ class Application extends Container implements Contract
 	/**
 	 * @var array
 	 */
-	protected $bootstraped = [];
+	protected $bootstrapped = [];
 
 	/**
 	 * @var array
@@ -83,16 +85,10 @@ class Application extends Container implements Contract
 	/**
 	 * Creates the application instance.
 	 *
-	 * @param  string|null  $basePath
-	 *
 	 * @return static
 	 */
-	public function __construct($basePath = null)
+	public function __construct()
 	{
-		if($basePath){
-			$this->setBasePath($basePath);
-		}
-
 		$this->registerBaseBindings();
 	}
 
@@ -115,20 +111,30 @@ class Application extends Container implements Contract
 			'Illuminate\Contracts\Container\Container',
 		]);
 
+		$this->bindPathsInContainer(['base', 'config', 'lang', 'assets', 'storage']);
 	}
 
 
 /* Path methods */
 
 	/**
-	 * Bind all of the application paths in the container.
-	 *
-	 * @return void
-	 */
-	protected function bindPathsInContainer()
+	* Bind all of the application paths in the container.
+	*
+	* @param array|string $keys
+	*
+	* @return void
+	*/
+	protected function bindPathsInContainer($keys)
 	{
-		foreach (['base', 'config', 'lang', 'assets', 'storage'] as $path) {
-			$this->instance('path.'.$path, $this->{$path.'Path'}());
+		foreach ((array) $keys as $key) {
+			$abstract = "path.{$key}";
+
+			if($this->bound($abstract))
+				continue;
+
+			$this->bind($abstract, function($app) use (key){
+				return $app->getPath($key, null);
+			});
 		}
 	}
 
@@ -140,7 +146,6 @@ class Application extends Container implements Contract
 	public function setBasePath($path)
 	{
 		$this->basePath = $basePath;
-		$this->bindPathsInContainer();
 	}
 
 	/**
@@ -153,15 +158,113 @@ class Application extends Container implements Contract
 		return $this->basePath;
 	}
 
+	/**
+	* Get explicitly path(s).
+	*
+	* @param string|null $key
+	* @param mixed $default
+	*
+	* @return string|array|mixed
+	*/
+	protected function explicitPaths($key=null, $default = null)
+	{
+		return Arr::get($this->explicitPaths, $key, $default);
+	}
 
 	/**
-	 * Get the path to the application "app" directory.
+	* Explicitly set a path's value.
+	*
+	* @param string $key
+	* @param mixed $path
+	*
+	* @return void
+	*/
+	protected function setExplicitPath($key, $path)
+	{
+		Arr::set($this->explicitPaths, $key, $path);
+	}
+
+	/**
+	 * Set the value  of a named path.
+	 *
+	 * @param string $key
+	 * @param mixed $path
+	 *
+	 * @return void
+	 */
+	public function usePath($key, $path)
+	{
+		$setter = Str::camel("use{$key}Path");
+
+		if( method_exists($this, $setter) ){
+			$this->setter($path);
+		}
+		else{
+			$this->setExplicitPath($key, $path);
+		}
+
+		$this->bindPathsInContainer($key);
+	}
+
+	/**
+	 * Add a path to a group of named paths.
+	 *
+	 * @param string $key
+	 * @param mixed $path
+	 * @param string $name
+	 *
+	 * @throws \InvalidArgumentException
+	 * @return void
+	 */
+	public function addPath($key, $path, $name = null)
+	{
+		$setter = Str::camel("add{$key}Path");
+
+		if( method_exists($this, $setter) ){
+			return $this->setter($path, $name);
+		}
+
+		$paths = $this->getPath($key);
+
+		if(!is_array($paths)){
+			throw new InvalidArgumentException("Error adding path. Path {$key} does not allow multiple values");
+		}
+
+		if($name)
+			Arr::set($paths, $name, $path);
+		else
+			$paths[] = $path;
+
+		$this->usePath($key, $paths);
+	}
+
+	/**
+	 * Get the value  of a named path.
+	 *
+	 * @param string $key
+	 * @param mixed $default
+	 *
+	 * @return string|mixed
+	 */
+	public function getPath($key, $default = null)
+	{
+		$getter = Str::camel("{$key}Path");
+
+		return method_exists($this, $getter)
+				? $this->getter() : $this->explicitPaths($key, $default);
+	}
+
+
+	/**
+	 * Get the full path of the given fragments relative to the base path.
+	 *
+	 * @param  string ...$fragments
 	 *
 	 * @return string
 	 */
-	public function path(...$fragments)
+	public function pathTo(...$fragments)
 	{
-		return join_paths($this->basePath, ...$fragments);
+		return join_paths($this->basePath(), ...$fragments);
 	}
 
 	/**
@@ -177,31 +280,31 @@ class Application extends Container implements Contract
 	/**
 	 * Get the path to the application configuration files.
 	 *
-	 * @return string
+	 * @return string|array
 	 */
 	public function configPath()
 	{
-		return $this->path('config');
+		return (array) $this->explicitPaths('config', $this->pathTo('config') );
 	}
 
 	/**
 	 * Get the path to the language files.
 	 *
-	 * @return string
+	 * @return string|array
 	 */
 	public function langPath()
 	{
-		return $this->path('resources', 'lang');
+		return $this->explicitPaths('lang', $this->pathTo('resources/lang') );
 	}
 
 	/**
-	 * Get the path to the public / web directory.
+	 * Get the path to the application's asset files.
 	 *
-	 * @return string
+	 * @return string|array
 	 */
 	public function assetsPath()
 	{
-		return $this->path('resources', 'assets');
+		return $this->explicitPaths('assets', $this->pathTo('resources/assets') );
 	}
 
 	/**
@@ -211,7 +314,7 @@ class Application extends Container implements Contract
 	 */
 	public function storagePath()
 	{
-		return $this->path('storage');
+		return $this->explicitPaths('storage', $this->pathTo('storage') );
 	}
 
 	/**
@@ -219,7 +322,7 @@ class Application extends Container implements Contract
 	 *
 	 * @return string
 	 */
-	public function debug()
+	public function isDebug()
 	{
 		$default = defined('WP_DEBUG') ? WP_DEBUG : false;
 		return $this->bound('config') ? $this->make('config')->get('app.debug', $default) : $default;
@@ -233,63 +336,53 @@ class Application extends Container implements Contract
 	*
 	* @param  array  $bootstrappers
 	* @param  bool  $force
+	* @param  bool  $silent
 	*
 	* @return void
 	*/
-	public function bootstrapWith($bootstrapers, $force = false)
+	public function bootstrapWith($bootstrappers, $force = false, $silent = false)
 	{
-		$this->hasBeenBootstrapped = true;
 
-		foreach ((array) $bootstrapers as $bootstraper) {
-			$this['signals']->fire('bootstrapping: '.$bootstrapper, [$this]);
+		if(!$silent) $this->hasBeenBootstrapped = true;
+
+		$fire = !$silent && $this->bound('signals');
+
+		$ready = $this->isReady();
+
+		foreach ((array) $bootstrappers as $bootstrapper) {
+
+			if( !$force && $this->bootstrapped( $bootstrapper ) )
+				continue;
+
+			if( $ready ){
+				trigger_error("It's a little bit too late to be bootstrapping the application ({$bootstrapper}).");
+			}
+
+			if($fire) $this->fireAppCallbacks("bootstrapping.{$bootstrapper}");
 
 			$this->make($bootstrapper)->bootstrap($this);
 
-			$this['signals']->fire('bootstrapped: '.$bootstrapper, [$this]);
-		}
+			if(!$ready) $this->bootstrapped[$bootstrapper] = true;
 
-		return $this;
-	}
+			if($fire) $this->fireAppCallbacks("bootstrapped.{$bootstrapper}");
 
-	/**
-	* Execute a bootstraper silently (without marking the application as bootstrapped before).
-	*
-	* @param  array  $bootstrapers
-	* @param  bool  $force
-	*
-	* @return void
-	*/
-	public function executeBootstraper($bootstraper, $force = false)
-	{
-		if( ($ready = $this->isReady()) ){
-			trigger_error("It's a little bit too late to be bootstrapping the application ({$bootstrapper}).");
-		}
-
-		if( !$force && $this->bootstraped( $bootstrapper ) ){
-			return;
-		}
-
-		$this->make($bootstrapper)->bootstrap($this);
-
-		if(!$ready){
-			$this->bootstraped[$bootstrapper] = true;
 		}
 	}
 
 	/**
-	 * Determine if the given bootstrapper has been executed.
-	 * Returns all executed bootstrappers if none is specified.
+	 * Determine if the given bootstrap class has been executed.
+	 * Returns all executed bootstrap classes if none is specified.
 	 *
-	 * @param  string|null  $bootstraper
+	 * @param  string|null  $bootstrapper
 	 *
 	 * @return bool|array
 	 */
-	public function bootstraped($bootstraper = null)
+	public function bootstrapped($bootstrapper = null)
 	{
 		if(is_null($bootstrapper))
-			return $this->bootstraped;
+			return $this->bootstrapped;
 
-		return isset($this->bootstraped[$bootstrapper]);
+		return isset($this->bootstrapped[$bootstrapper]);
 	}
 
 
@@ -301,6 +394,16 @@ class Application extends Container implements Contract
 	public function hasBeenBootstrapped()
 	{
 		return $this->hasBeenBootstrapped;
+	}
+
+	/**
+	 * Clear the list of bootstrap classes
+	 *
+	 * @return void
+	 */
+	protected function clearBootstrapped()
+	{
+		$this->bootstrapped = [];
 	}
 
 	/**
@@ -694,19 +797,29 @@ class Application extends Container implements Contract
 	*/
 	protected function bindAppCallback($event, $callback, $priority = null, $once = false)
 	{
-		$this->signals->bind([$this, $event], $priority, null, $once);
+		if($this->bound('signals'))
+			return $this->signals->bind([get_class($this), $event], $priority, null, $once);
+
+		$msg = "Error binding event callback. Signals service is not available. It might be too early to do this.";
+		trigger_error($msg);
 	}
 
 
 	/**
 	* Call the booting callbacks for the application.
 	*
-	* @param  array  $callbacks
-	* @return void
+	* @param  string  $event
+	* @param  mixed  ...$payload
+	*
+	* @return mixed
 	*/
-	protected function fireAppCallbacks($event)
+	protected function fireAppCallbacks($event, ...$payload)
 	{
-		$this->signals->emit([$this, $event], $this);
+		if($this->bound('signals'))
+			return $this->signals->fire([get_class($this), $event], $this, ...$payload);
+
+		$msg = "Error firing application event. Signals service is not available. It might be too early to do this.";
+		trigger_error($msg);
 	}
 
 
@@ -727,12 +840,13 @@ class Application extends Container implements Contract
 	*
 	* @return void
 	*/
-	public function markAppAsReady()
+	public function setAppAsReady()
 	{
 		if($this->ready) return;
 
 		$this->ready = true;
 		$this->fireAppCallbacks('ready');
+		$this->clearBootstrapped();
 	}
 
 
@@ -913,5 +1027,39 @@ class Application extends Container implements Contract
 	public function bound($abstract)
 	{
 		return parent::bound($abstract) || isset($this->deferredServices[$abstract]);
+	}
+
+	/**
+	 * Allow fluent and dynamic get/set calls of paths.
+	 *
+     * @param string $method
+     * @param array  $args
+     *
+     * @throws \BadMethodCallException
+     *
+     * @return mixed
+	 */
+	public function __call($method, $args)
+	{
+		if(substr($method, -4) === 'Path'){
+
+			$key = substr($method, 0, -4);
+
+			if(strpos($key, 'use') === 0){
+				$key = substr($key, 3);
+				$method = 'usePath';
+			}
+			elseif(strpos($key, 'add') === 0){
+				$key = substr($key, 3);
+				$method = 'addPath';
+			}
+			else{
+				$method = 'getPath';
+			}
+
+			return $this->{$method}( Str::snake($key), ...$args );
+		}
+
+		throw new BadMethodCallException("Call to undefined method '{$method}' not in application.");
 	}
 }
