@@ -27,16 +27,16 @@ class BaseTestCase extends ServiceTestCase
 
 	protected function getMakeServiceParameters()
 	{
-		return ['with_signals' => $this->withSignals];
+		return ['signals' => $this->withSignals];
 	}
 
 	protected function sharedApp()
 	{
-		return $this->getContainer()->make('app.shared');
+		return $this->getContainer()->make('app.shared', $this->getMakeServiceParameters());
 	}
 
 	protected function newApp()
 	{
-		return $this->getContainer()->make('app.new');
+		return $this->getContainer()->make('app.new', $this->getMakeServiceParameters());
 	}
 }

@@ -314,6 +314,27 @@ class Application extends Container implements Contract
 		return $this->bound('config') ? $this->make('config')->get('app.debug', $default) : $default;
 	}
 
+
+	/**
+	* Determine if we are running in the console.
+	*
+	* @return bool
+	*/
+	public function runningInConsole()
+	{
+		return php_sapi_name() == 'cli';
+	}
+
+	/**
+	* Determine if we are running unit tests.
+	*
+	* @return bool
+	*/
+	public function runningUnitTests()
+	{
+		return $this->runningInConsole() && defined('DOING_UNIT_TESTS') ? (bool) DOING_UNIT_TESTS : false;
+	}
+
 /********* Path methods ********/
 
 
@@ -337,18 +358,19 @@ class Application extends Container implements Contract
 
 		foreach ((array) $bootstrappers as $bootstrapper) {
 
-			if( !$force && $this->bootstrapped( $bootstrapper ) )
+			if( !$force && $this->bootstrapped( $bootstrapper ) ){
 				continue;
+			}
 
 			if( $ready ){
-				trigger_error("It's a little bit too late to be bootstrapping the application ({$bootstrapper}).");
+				trigger_error("It's a little bit too late to be bootstrapping the application (with: {$bootstrapper}).");
 			}
 
 			if($fire) $this->fireAppCallbacks("bootstrapping.{$bootstrapper}");
 
 			$this->make($bootstrapper)->bootstrap($this);
 
-			if(!$ready) $this->bootstrapped[$bootstrapper] = true;
+			$this->bootstrapped[$bootstrapper] = true;
 
 			if($fire) $this->fireAppCallbacks("bootstrapped.{$bootstrapper}");
 
@@ -383,13 +405,31 @@ class Application extends Container implements Contract
 	}
 
 	/**
-	 * Clear the list of bootstrap classes
-	 *
-	 * @return void
-	 */
-	protected function clearBootstrapped()
+	* Register a callback to run before a bootstrapper.
+	*
+	* @param  string  $bootstrapper
+	* @param  mixed  $callback
+	* @param  int  $priority
+	*
+	* @return void
+	*/
+	public function beforeBootstrapping($bootstrapper, $callback, $priority = null)
 	{
-		$this->bootstrapped = [];
+		$this->bindAppCallback("bootstrapping.{$bootstrapper}", $callback, $priority );
+	}
+
+	/**
+	* Register a callback to run after a bootstrapper.
+	*
+	* @param  string  $bootstrapper
+	* @param  mixed  $callback
+	* @param  int  $priority
+	*
+	* @return void
+	*/
+	public function afterBootstrapping($bootstrapper, $callback, $priority = null)
+	{
+		$this->bindAppCallback("bootstrapped.{$bootstrapper}", $callback, $priority );
 	}
 
 	/**
@@ -784,7 +824,7 @@ class Application extends Container implements Contract
 	protected function bindAppCallback($event, $callback, $priority = null, $once = false)
 	{
 		if($this->bound('signals'))
-			return $this->signals->bind([get_class($this), $event], $priority, null, $once);
+			return $this->signals->bind($this->appEventTag($event), $callback, $priority, null, $once);
 
 		$msg = "Error binding event callback. Signals service is not available. It might be too early to do this.";
 		trigger_error($msg);
@@ -801,13 +841,38 @@ class Application extends Container implements Contract
 	*/
 	protected function fireAppCallbacks($event, ...$payload)
 	{
-		if($this->bound('signals'))
-			return $this->signals->fire([get_class($this), $event], $this, ...$payload);
+		if($this->bound('signals')){
+			if(!in_array($this, $payload))
+				$payload[] = $this;
+
+			return $this->signals->fire($this->appEventTag($event), $payload);
+		}
 
 		$msg = "Error firing application event. Signals service is not available. It might be too early to do this.";
 		trigger_error($msg);
 	}
 
+	/**
+	* Get the complete application's event tag.
+	*
+	* @param string $vent
+	*
+	* @return string|array
+	*/
+	public function appEventTag($event)
+	{
+		return [ $this->getSignalsNamespace(), $event ];
+	}
+
+	/**
+	* Get the namespace for application events.
+	*
+	* @return string
+	*/
+	public function getSignalsNamespace()
+	{
+		return get_class($this);
+	}
 
 	/**
 	* Determine if the application has fully bootstrapped, running and ready.
@@ -826,13 +891,12 @@ class Application extends Container implements Contract
 	*
 	* @return void
 	*/
-	public function setAppAsReady()
+	public function setAppReady()
 	{
 		if($this->ready) return;
 
 		$this->ready = true;
 		$this->fireAppCallbacks('ready');
-		$this->clearBootstrapped();
 	}
 
 

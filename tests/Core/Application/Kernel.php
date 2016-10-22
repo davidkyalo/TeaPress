@@ -1,8 +1,10 @@
 <?php
 namespace TeaPress\Tests\Core\Application;
 
-use TeaPress\Core\Application;
+use TeaPress\Signals\Hub;
 use Teapress\Tests\Base\TestKernel;
+use TeaPress\Signals\Traits\Online;
+use TeaPress\Tests\Core\Mocks\Application;
 
 class Kernel extends TestKernel
 {
@@ -20,41 +22,58 @@ class Kernel extends TestKernel
 
 	public function register()
 	{
-
-		$this->app->bind('app.signals', function($app){
-			return $app['signals'];
-		});
-
-		$this->app->bind('app.signals_aliases', function($app){
-			return $app->serviceAliases('signals');
-		});
-
-		$container = $this->app;
-
-		$setSignals = function($app) use($container){
-			$app->instance('signals', $container['app.signals']);
-			$app->alias('signals', $container['app.signals_aliases']);
-			return $app;
-		};
-
-		$this->app->singleton('app.shared', function($container, $params) use ($setSignals){
-			$app = new Application;
-			if(isset($params['with_signals']) && $params['with_signals'])
-				$setSignals( $app );
-
-			return $app;
-		});
-
-		$this->app->bind('app.new', function($container, $params) use ($setSignals){
-			$app = new Application;
-
-			if(isset($params['with_signals']) && $params['with_signals'])
-				$setSignals( $app );
-
-			return $app;
-		});
+		$this->registerSignals();
+		$this->registerAppFactory();
+		$this->registerApps();
 
 		$this->aliasServices($this->serviceAliases());
+	}
+
+	public function registerApps()
+	{
+		$this->app->singleton('app.shared', function($container, $args=[]) {
+			return $container->make('app.factory', $args);
+		});
+
+		$this->app->bind('app.new', function($container, $args=[]) {
+			return $container->make('app.factory', $args);
+		});
+	}
+
+	protected function registerSignals()
+	{
+		$this->app->bind('app.signals.factory', function($app, $args)
+		{
+			$container = isset($args['app']) ? $args['app'] : $app;
+
+			if($app->bound('signals.factory'))
+				return $app->make('signals.factory', $args);
+
+			$hub = new Hub( $container );
+			Online::setSignals($hub);
+			return $hub;
+		});
+
+		$this->app->bind('app.signals.aliases', function($app){
+			return $app->serviceAliases('signals');
+		});
+	}
+
+	protected function registerAppFactory()
+	{
+		$this->app->bind('app.factory', function($container, $args){
+
+			$app = new Application;
+
+			$with_signals = count($args) > 0 ? (bool) array_shift($args) : true;
+
+			if( $with_signals ){
+				$app->instance('signals', $container->make('app.signals.factory', ['app' => $app]) ) ;
+				$app->alias('signals', $container['app.signals.aliases']);
+			}
+
+			return $app;
+		});
 	}
 }
 

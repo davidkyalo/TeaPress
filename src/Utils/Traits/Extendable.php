@@ -7,49 +7,56 @@ use TeaPress\Contracts\Exceptions\BadMethodOrExtensionCall;
 
 trait Extendable {
 
-	protected $extensions = [];
 
-	public function extend($method, $extension){
-		$this->extensions[$method] = $extension;
-		return $this;
+	protected static $extensions = [];
+
+	public static function extend($method, callable $extension)
+	{
+		static::$extensions[$method] = $extension;
 	}
 
-	public function hasExtension($method){
-		return isset($this->extensions[$method]);
+	public static function hasExtension($method)
+	{
+		return isset(static::$extensions[$method]);
 	}
 
-	protected function getExtensions(){
-		return $this->extensions;
+	protected static function getExtensions(){
+		return static::$extensions;
 	}
 
-	public function setExtensions(array $extensions){
+	public static function addExtensions(array $extensions)
+	{
 		foreach ($extensions as $method => $extension) {
-			$this->extend($method, $extension);
+			static::extend($method, $extension);
 		}
-		return $this;
 	}
 
-	protected function callExtension($method, $parameters, $silent = false){
+	protected function callExtension($method, $parameters, $silent = false)
+	{
 		if( !$this->hasExtension($method) ){
 			$exception = new BadMethodOrExtensionCall($method, $this);
 			if( !$silent )
 				throw $exception;
 			return $exception;
 		}
-		$callback = $this->extensions[$method];
+
+		$callback = static::$extensions[$method];
 		$parameters = $this->getExtensionParameters($parameters, $method);
+
 		if( $callback instanceof Closure )
-			return call_user_func_array( $callback->bindTo($this, get_class($this)), $parameters );
+			return call_user_func_array( $callback->bindTo($this), $parameters );
 		else
 			return call_user_func_array($callback, $parameters );
 	}
 
-	protected function getExtensionParameters($parameters, $method = null){
+	protected function getExtensionParameters($parameters, $method = null)
+	{
 		$parameters[] = $this;
 		return $parameters;
 	}
 
-	public function __call($method, $parameters){
+	public function __call($method, $parameters)
+	{
 		return $this->callExtension( $method, $parameters, false );
 	}
 }

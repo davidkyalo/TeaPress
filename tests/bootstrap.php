@@ -4,7 +4,7 @@ if(defined('ABSPATH'))
 	return;
 
 if(!defined('DOING_UNIT_TESTS'))
-	define('DOING_UNIT_TESTS', __DIR__);
+	define('DOING_UNIT_TESTS', true);
 
 if(!defined('WORDPRESS_ROOT_DIR'))
 	define('WORDPRESS_ROOT_DIR', __DIR__ .'/../../wordpress');
@@ -27,6 +27,5 @@ spl_autoload_register(function($class)
 		}
 	}
 });
-
 
 require WORDPRESS_ROOT_DIR .'/wp-load.php';

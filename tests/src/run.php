@@ -3,23 +3,24 @@
 use TeaPress\Tests\Container;
 
 
-$GLOBALS['executions'] = $GLOBALS['wp_actions'];
 
-add_action('all', function($tag){
-	global $executions, $wp_actions;
+// $GLOBALS['executions'] = $GLOBALS['wp_actions'];
 
-	if(isset($wp_actions[$tag])){
-		$executions[$tag] = $wp_actions[$tag];
-	}
-	else
-	{
-		if(!isset($executions[$tag]))
-			$executions[$tag] = 1;
-		else
-			++$executions[$tag];
-	}
+// add_action('all', function($tag){
+// 	global $executions, $wp_actions;
 
-});
+// 	if(isset($wp_actions[$tag])){
+// 		$executions[$tag] = $wp_actions[$tag];
+// 	}
+// 	else
+// 	{
+// 		if(!isset($executions[$tag]))
+// 			$executions[$tag] = 1;
+// 		else
+// 			++$executions[$tag];
+// 	}
+
+// });
 
 
 
@@ -69,7 +70,13 @@ if(!function_exists('pprint')){
 
 echo "\n";
 
-$app = new Container( dirname(__DIR__) );
+function bootstrap_tests_container()
+{
+	$app = new Container( dirname(__DIR__) );
+	$app->boot();
+}
+
+bootstrap_tests_container();
 
 function testapp($service = null, $parameters = null)
 {
@@ -77,4 +84,3 @@ function testapp($service = null, $parameters = null)
 	return is_null($service) ? $app : $app->make($service, (array) $parameters);
 }
 
-$app->boot();

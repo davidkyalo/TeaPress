@@ -88,11 +88,6 @@ abstract class Factory
 	];
 
 	/**
-	 * @var string
-	 */
-	protected $appEventsNamespace;
-
-	/**
 	 * @var array
 	 */
 	protected $bootstrappersHook = ['plugins_loaded', -9999];
@@ -412,21 +407,7 @@ abstract class Factory
 
 		$this->bootstrapped = true;
 
-		$this->app->setAppAsReady();
-	}
-
-	/**
-	* Get the namespace for application events.
-	*
-	* @return string
-	*/
-	protected function getAppEventsNamespace()
-	{
-		if( is_null($this->appEventsNamespace) ){
-			$this->appEventsNamespace = get_class($this->app);
-		}
-
-		return $this->appEventsNamespace;
+		$this->app->setAppReady();
 	}
 
 	/**
@@ -438,7 +419,7 @@ abstract class Factory
 	*/
 	protected function getAppEventTag($event)
 	{
-		return [$this->getAppEventsNamespace(), $event];
+		return $this->app->appEventTag($event);
 	}
 
 	/**

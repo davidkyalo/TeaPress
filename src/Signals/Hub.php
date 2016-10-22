@@ -1049,7 +1049,7 @@ class Hub implements Contract
 	 */
 	public function fire($event, $payload = [], $halt = false)
 	{
-		return $this->emitSignalWith($event, (array) $payload, $halt);
+		return $this->emitSignalWith($event,  (array) $payload, $halt);
 	}
 
 	/**

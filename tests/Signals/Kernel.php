@@ -26,20 +26,54 @@ class Kernel extends TestKernel
 
 	public function register()
 	{
-		$this->app->instance('signals', new Hub( $this->app ));
-		$this->app->bind('signals.hookable_mock', function($app){
-			return new HookableService;
-		});
+		$this->registerFactory();
+		$this->registerHub();
+		$this->registerHookableService();
+
 		$this->aliasServices($this->serviceAliases());
 	}
 
-	public function registerHandlers()
-	{
 
+	public function registerHub()
+	{
+		$this->app->singleton('signals', function($app) {
+			return $app->make('signals.factory');
+		});
+	}
+
+
+
+	protected function registerHookableService()
+	{
+		$this->app->bind('signals.hookable_mock', function($app){
+			return new HookableService;
+		});
+	}
+
+	protected function registerFactory()
+	{
+		$this->app->bind('signals.factory', function($app, $args){
+
+			$container = isset($args['app']) ? $args['app'] : $app;
+
+			$hub = new Hub( $container );
+
+			Online::setSignals($hub);
+
+			return $hub;
+		});
+
+	}
+
+	protected function getTearDownExtension()
+	{
+		return function(){
+
+		};
 	}
 
 	public function boot()
 	{
-		Online::setSignals($this->app['signals']);
+
 	}
 }
