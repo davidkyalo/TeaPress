@@ -6,7 +6,7 @@ use TeaPress\Tests\Core\Mocks\Bootstrap\Silent;
 use TeaPress\Tests\Core\Mocks\Bootstrap\ItWorks;
 use TeaPress\Tests\Core\Mocks\Bootstrap\CountExecutions;
 
-class BootstappersTest extends BaseTestCase
+class BootstappersTest extends TestCase
 {
 	protected $serviceName='app.new';
 

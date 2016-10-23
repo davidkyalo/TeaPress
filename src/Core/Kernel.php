@@ -2,14 +2,13 @@
 namespace TeaPress\Core;
 
 use Closure;
-use TeaPress\Contracts\Signals\Emitter;
+use TeaPresss\Utils\Arr;
 use TeaPress\Contracts\Signals\Hub as Signals;
-use TeaPress\Signals\Traits\Emitter as EmitterTrait;
+use TeaPress\Contracts\Core\Kernel as Contract;
 use TeaPress\Contracts\Core\Container as ContainerContract;
 
-abstract class Kernel implements Emitter
+abstract class Kernel implements Contract
 {
-	use EmitterTrait;
 
 	/**
 	 * @var \TeaPress\Contracts\Core\Container
@@ -26,18 +25,33 @@ abstract class Kernel implements Emitter
 	 * Creates the kernel instance.
 	 *
 	 * @param \TeaPress\Contracts\Core\Container $app
+	 * @param \TeaPress\Contracts\Signals\Hub $signals
 	 *
 	 * @return void
 	 */
-	public function __construct(ContainerContract $app )
+	public function __construct(ContainerContract $app, Signals $signals = null)
 	{
 		$this->app = $app;
-
-		$this->signals = static::getSignals();
+		$this->signals = $signals;
+		$this->initialize();
 	}
 
 	/**
-	 * Boot the kernel. Called immediately after all kernels have been registered.
+	 * Initialize the kernel. This is called from the constructor.
+	 *
+	 * @return void
+	 */
+	protected function initialize()
+	{
+
+	}
+
+	/**
+	 * Boot the kernel. Called when booting the application.
+	 * This method will always be called regardless of whether the kernel is differed or not.
+	 *
+	 * This is a good point to register event listeners for events fired early in the application.
+	 * For example some services might fire an event when started or apply filters for a config value they need.
 	 *
 	 * @return void
 	 */
@@ -47,7 +61,8 @@ abstract class Kernel implements Emitter
 	}
 
 	/**
-	 * Called to register service aliases. Called after the register method.
+	 * Called to register aliases for the services the kernels provides.
+	 * Called after the kernel is booted.
 	 *
 	 * @return void
 	 */
@@ -57,7 +72,9 @@ abstract class Kernel implements Emitter
 	}
 
 	/**
-	 * Register the services this kernel provides.
+	 * Register the services this kernel provides. At this point,
+	 * all kernels have booted but not all have registered so please refrain from directly using other services.
+	 * You can use them inside your service builder closure functions though.
 	 *
 	 * @return void
 	 */
@@ -67,7 +84,8 @@ abstract class Kernel implements Emitter
 	}
 
 	/**
-	 * Runs the kernel. Called after all kernels have booted and wordpress is initialized.
+	 * Runs the kernel. Called after all kernels have been registered.
+	 * At this point you are free to use any services.
 	 *
 	 * @return void
 	 */
@@ -77,7 +95,7 @@ abstract class Kernel implements Emitter
 	}
 
 	/**
-	 * Get the services provided by the provider.
+	 * Get the services provided by the kernel.
 	 *
 	 * @return array
 	 */
@@ -87,25 +105,18 @@ abstract class Kernel implements Emitter
 	}
 
 	/**
-	 * Get the events that trigger this kernel to run.
+	 * Get the events that trigger this kernel to register and run.
+	 * This is only necessary if the kernel is differed.
 	 *
 	 * @return array
 	 */
 	public function when()
 	{
-		return [
-				[$this, 'booted', 24],
-				[$this, 'boot'],
-				[$this, 'run'],
-				['init' => -900],
-				'wp_loaded' => -900,
-				'init',
-				'init|1'
-		];
+		return [];
 	}
 
 	/**
-	 * Determine if the provider is deferred.
+	 * Determine if the kernel is deferred.
 	 *
 	 * @return bool
 	 */
@@ -115,27 +126,35 @@ abstract class Kernel implements Emitter
 	}
 
 	/**
-	 * Get a list of files that should be compiled for the package.
+	 * Set the signals hub instance.
 	 *
-	 * @return array
+	 * @param \TeaPress\Contracts\Signals\Hub $signals
+	 *
+	 * @return void
 	 */
-	public static function compiles()
+	public function setSignals(Signals $signals)
 	{
-		return [];
+		$this->signals = $signals;
 	}
 
 	/**
 	 * Merge the given configuration with the existing configuration.
 	 *
-	 * @param  string  $path
-	 * @param  string  $key
+	 * @param  string  	$path
+	 * @param  string  	$key
+	 *
 	 * @return void
 	 */
 	protected function mergeConfigFrom($path, $key)
 	{
-		$config = $this->app['config']->get($key, []);
+		$config = $this->app['config'];
 
-		$this->app['config']->set($key, array_merge(require $path, $config));
+		$merged = array_merge(
+					$config->getLoader()->loadPath($path),
+					(array) $config->get($key, [])
+				);
+
+		$config->set($key, $merged);
 	}
 
 	/**
@@ -167,15 +186,68 @@ abstract class Kernel implements Emitter
 	}
 
 	/**
-	 * Register a new boot listener.
+	 * Register a callback to be run before booting the kernel.
 	 *
 	 * @param  mixed  $callback
 	 * @param  int  $priority
+	 *
 	 * @return bool
 	 */
-	public static function registering($callback, $priority = null)
+	public function booting($callback, $priority = null)
 	{
-		return static::bindCallback('register', $callback, $priority);
+		return $this->app->beforeBootingKernel( get_class($this), $callback, $priority);
+	}
+
+	/**
+	 * Register a callback to be run after booting the kernel.
+	 *
+	 * @param  mixed  $callback
+	 * @param  int  $priority
+	 *
+	 * @return bool
+	 */
+	public function booted($callback, $priority = null)
+	{
+		return $this->app->afterBootingKernel( get_class($this), $callback, $priority);
+	}
+
+	/**
+	 * Register a new 'registering' listener.
+	 *
+	 * @param  mixed  $callback
+	 * @param  int  $priority
+	 *
+	 * @return bool
+	 */
+	public function registering($callback, $priority = null)
+	{
+		return $this->app->beforeRegisteringKernel( get_class($this), $callback, $priority);
+	}
+
+	/**
+	 * Register a new 'registered' listener.
+	 *
+	 * @param  mixed  $callback
+	 * @param  int  $priority
+	 *
+	 * @return bool
+	 */
+	public function registered($callback, $priority = null)
+	{
+		return $this->app->afterRegisteringKernel( get_class($this), $callback, $priority);
+	}
+
+	/**
+	 * Register a new 'before_running' listener.
+	 *
+	 * @param  mixed  $callback
+	 * @param  int  $priority
+	 *
+	 * @return bool
+	 */
+	public function beforeRunning($callback, $priority = null)
+	{
+		return $this->app->beforeRunningKernel( get_class($this), $callback, $priority);
 	}
 
 	/**
@@ -183,57 +255,11 @@ abstract class Kernel implements Emitter
 	 *
 	 * @param  mixed  $callback
 	 * @param  int  $priority
-	 * @return bool
-	 */
-	public static function running($callback, $priority = null)
-	{
-		return static::bindCallback('run', $callback, $priority);
-	}
-
-
-	/**
-	 * Register a new "booted" listener.
 	 *
-	 * @param  mixed  $callback
-	 * @param  int  $priority
 	 * @return bool
 	 */
-	public static function registered($callback, $priority = null)
+	public function running($callback, $priority = null)
 	{
-		return static::bindCallback('registered', $callback, $priority);
+		return $this->app->afterRunningKernel(get_class($this), $callback, $priority);
 	}
-
-	protected function fireKenelEvent($event, ...$payload)
-	{
-		if(empty($payload))
-			$payload = [ $this, $this->app];
-
-		return $this->emitSignal($event, ...$payload);
-	}
-
-	public function fireBootingCallbacks()
-	{
-		$this->fireKenelEvent('boot');
-	}
-
-	public function fireBootedCallbacks()
-	{
-		$this->fireKenelEvent('booted');
-	}
-
-	public function fireRegisteringCallbacks()
-	{
-		$this->fireKenelEvent('register');
-	}
-
-	public function fireRegisteredCallbacks()
-	{
-		$this->fireKenelEvent('registered');
-	}
-
-	public function fireRunningCallbacks()
-	{
-		$this->fireKenelEvent('run');
-	}
-
 }

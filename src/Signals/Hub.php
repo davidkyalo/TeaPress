@@ -395,7 +395,7 @@ class Hub implements Contract
 	* @param  int|null|bool					$accepted_args
 	* @param  bool							$once
 	*
-	* @return static
+	* @return bool
 	*/
 	public function bind($tag, $callback, $priority = null, $accepted_args = null, $once = null, $weak = false)
 	{
@@ -428,7 +428,7 @@ class Hub implements Contract
 
 		$this->bumpBindingsCount($callback, $tag, $once);
 
-		return $this;
+		return true;
 	}
 
 	/**

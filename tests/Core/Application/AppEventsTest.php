@@ -2,7 +2,7 @@
 namespace TeaPress\Tests\Core\Application;
 
 
-class AppEventsTest extends BaseTestCase
+class AppEventsTest extends TestCase
 {
 	protected $serviceName='app.new';
 

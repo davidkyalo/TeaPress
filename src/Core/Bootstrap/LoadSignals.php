@@ -15,5 +15,12 @@ class LoadSignals
 	public function bootstrap(Application $app)
 	{
 		$app->register('TeaPress\Config\SignalsKernel');
+
+		$signals = $app->make('signals');
+
+		foreach ($app->kernels() as $kernel) {
+			$kernel->setSignals( $signals );
+		}
+
 	}
 }

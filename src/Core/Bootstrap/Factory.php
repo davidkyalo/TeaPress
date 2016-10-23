@@ -7,7 +7,7 @@ use BadMethodCallException;
 use InvalidArgumentException;
 use TeaPress\Signals\Traits\Online;
 use TeaPress\Contracts\Core\Application as AppContract;
-use TeaPress\Core\Exceptions\CantBootstrapApplicationException;
+use TeaPress\Core\Exception\ApplicationNotReadyException;
 
 abstract class Factory
 {
@@ -156,7 +156,8 @@ abstract class Factory
 	/**
 	* Bootstrap the application.
 	*
-	* @throws \TeaPress\Core\Exceptions\CantBootstrapApplicationException
+	* @throws \TeaPress\Core\Exception\ApplicationNotReadyException
+	*
 	* @return void
 	*/
 	public function bootstrap()
@@ -167,7 +168,7 @@ abstract class Factory
 		$this->prepare();
 
 		if(!$this->canBootstrap()){
-			throw new CantBootstrapApplicationException("Application not ready for bootstrapping.");
+			throw new ApplicationNotReadyException("Application not ready for bootstrapping.");
 		}
 
 		$this->bootstrapApplication();

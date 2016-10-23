@@ -3,6 +3,7 @@
 namespace TeaPress\Config;
 
 use TeaPress\Utils\Arr;
+use TeaPress\Utils\Str;
 use TeaPress\Filesystem\Filesystem;
 
 class FileLoader implements LoaderInterface
@@ -120,15 +121,17 @@ class FileLoader implements LoaderInterface
 
 	protected function getPathKey($path, $base = '')
 	{
-		$path = trim($path, '/');
-		$base = trim($base, '/');
+		$slash = DIRECTORY_SEPARATOR;
 
-		$key = substr($path, strlen($base));
+		$path = trim($path, $slash);
+		$base = trim($base, $slash);
+
+		$key = substr($path, Str::length($base));
 
 		if( substr($key, -4) == '.php' )
 			$key = substr($key, 0, -4);
 
-		return str_replace('/','.', trim($key, '/'));
+		return str_replace($slash,'.', trim($key, $slash));
 	}
 
 

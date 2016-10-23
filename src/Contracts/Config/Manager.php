@@ -72,4 +72,11 @@ interface Manager extends Repository
 	 */
 	public function addNamespace($namespace, $paths);
 
+	/**
+	 * Get the configuration files loader.
+	 *
+	 * @return \TeaPress\Config\LoaderInterface
+	 */
+	public function getLoader();
+
 }

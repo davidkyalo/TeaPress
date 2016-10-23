@@ -4,7 +4,7 @@ namespace TeaPress\Tests\Core\Application;
 use TeaPress\Core\Application;
 use TeaPress\Tests\Base\ServiceTestCase;
 
-class BaseTestCase extends ServiceTestCase
+class TestCase extends ServiceTestCase
 {
 	protected $serviceName;
 	protected $serviceClass = Application::class;

@@ -2,7 +2,7 @@
 namespace TeaPress\Tests\Core\Application;
 
 
-class ApplicationTest extends BaseTestCase
+class ApplicationTest extends TestCase
 {
 	protected $serviceName='app.shared';
 

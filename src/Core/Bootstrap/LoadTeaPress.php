@@ -15,6 +15,7 @@ class LoadTeaPress
 	public function bootstrap(Application $app)
 	{
 		$this->bindAliasLoader($app);
+		$this->registerTheFilesystem($app);
 	}
 
 	protected function bindAliasLoader($app)
@@ -22,4 +23,11 @@ class LoadTeaPress
 		$app->instance('alias', $loader = AliasLoader::getInstance() );
 		$loader->register();
 	}
+
+	protected function registerTheFilesystem($app)
+	{
+		$app->register('TeaPress\Filesystem\FilesystemKernel');
+	}
+
+
 }

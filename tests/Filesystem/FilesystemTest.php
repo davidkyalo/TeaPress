@@ -58,4 +58,35 @@ class FilesystemTest extends ServiceTestCase
 
 		$this->assertEquals(1, $count);
 	}
+
+	public function testFindFiles()
+	{
+		$fsys = $this->files;
+		$path = __DIR__ .'/data';
+
+		$fd_files = [];
+		foreach ($fsys->findFiles(dirname(__DIR__))->name('*Test')->sortByName() as $key => $file) {
+			$fd_files[] = $file->getPathname();
+		}
+
+		$fd_dirs = [];
+		foreach ($fsys->findDirs( dirname(__DIR__))->name('later')->name('Mocks') as $key => $v) {
+			$fd_dirs[] = $v->getPathname();
+		}
+
+		// pprint("Finder Files", $fsys->findFiles(dirname(__DIR__))->name('*Test.php')->get('real_path'));
+		// pprint("Glob Files", $fsys->files(dirname(__DIR__), true, [ 'notName' => '*Test.php', 'path' => ['Core', 'Config'] ]));
+		// pprint("Finder Dirs", $fd_dirs);
+		// pprint("Glob Dirs", $fsys->directories($path));
+	}
+
+	public function testRequireAll()
+	{
+		$fsys = $this->files;
+		$path = __DIR__ .'/data';
+
+		$results = $this->files->requireAll($path, ['passed_data' => 'I was just passed']);
+
+		// pprint("Results", $results);
+	}
 }

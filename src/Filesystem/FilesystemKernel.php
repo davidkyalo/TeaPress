@@ -10,6 +10,10 @@ class FilesystemKernel extends Kernel
 		$this->app->singleton('files', function () {
 			return new Filesystem;
 		});
+
+		$this->app->bind('finder', function(){
+			return Finder::create();
+		});
 	}
 
 	public function registerAliases()
@@ -19,6 +23,11 @@ class FilesystemKernel extends Kernel
 			'TeaPress\Contracts\Filesystem\Filesystem',
 			'Illuminate\Filesystem\Filesystem',
 			'Illuminate\Contracts\Filesystem\Filesystem'
+		]);
+
+		$this->app->alias('finder', [
+			'TeaPress\Filesystem\Finder',
+			'Symfony\Component\Finder\Finder'
 		]);
 	}
 

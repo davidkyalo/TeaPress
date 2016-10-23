@@ -3,7 +3,7 @@ namespace TeaPress\Tests\Core\Application;
 
 use TeaPress\Utils\Str;
 
-class PathsTest extends BaseTestCase
+class PathsTest extends TestCase
 {
 	protected $serviceName='app.shared';
 

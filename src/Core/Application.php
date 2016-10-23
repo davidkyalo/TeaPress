@@ -7,10 +7,10 @@ use TeaPress\Utils\Arr;
 use BadMethodCallException;
 use InvalidArgumentException;
 use UnexpectedValueException;
-use TeaPress\Signals\SignalsKernel;
 use TeaPress\Contracts\Core\Application as Contract;
-use TeaPress\Contracts\Core\Manifest as ManifestContract;
-use TeaPress\Contracts\Core\ServiceProvider as ProviderContract;
+use TeaPress\Contracts\Core\Kernel as KernelContract;
+use TeaPress\Core\Exception\ApplicationNotReadyException;
+
 
 class Application extends Container implements Contract
 {
@@ -456,46 +456,43 @@ class Application extends Container implements Contract
 	/**
 	* Register a kernel with the application.
 	*
-	* @param  string|\TeaPress\Core\Kernel|array  $kernel
+	* @param  string|\TeaPress\Contracts\Core\Kernel  $kernel
 	* @param  array  $options
 	* @param  bool   $force
 	*
-	* @return \TeaPress\Core\Kernel|array
+	* @return \TeaPress\Contracts\Core\Kernel
 	*/
 	public function register($kernel, array $options = [], $force = false)
 	{
-		if(is_array($kernel)){
-			$kernels = [];
-			foreach ($kernel as $k) {
-				$kernels[] = $this->register($k, $options, $force);
-				$options = [];
-			}
+		$name = is_string($kernel) ? $kernel : get_class($kernel);
 
-			return $kernels;
+		$kernel = $this->kernel($kernel);
+
+		if(!$this->kernelIsBooted($name)){
+			$this->bootKernel($kernel);
 		}
 
-		$instance = $this->kernel($kernel);
+		if($force || !$this->kernelIsRegistered($name)){
 
-		if($force || !$this->kernelIsRegistered($kernel)){
+			$this->fireKernelCallbacks($name, 'registering', $kernel);
 
-			if(!$this->kernelIsBooted($kernel)){
-				$this->bootKernel($kernel);
-			}
-
-			$instance->register();
+			$kernel->register();
 
 			foreach ($options as $key => $value) {
 				$this[$key] = $value;
 			}
 
-			$this->markAsRegistered($kernel);
+			$this->registeredKernels[$name] = true;
+
+			$this->fireKernelCallbacks($name, 'registered', $kernel);
+
 		}
 
 		if($this->isRunning()){
 			$this->runKernel($kernel);
 		}
 
-		return $instance;
+		return $kernel;
 	}
 
 	/**
@@ -504,7 +501,7 @@ class Application extends Container implements Contract
 	*
 	* @param string $kernel 	The kernel class name.
 	*
-	* @return \TeaPress\Core\Kernel
+	* @return \TeaPress\Contracts\Core\Kernel
 	*/
 	public function kernel($kernel)
 	{
@@ -523,7 +520,7 @@ class Application extends Container implements Contract
 	*
 	* @param null|string $kernel 	The kernel class name.
 	*
-	* @return array|null|\TeaPress\Core\Kernel
+	* @return array|null|\TeaPress\Contracts\Core\Kernel
 	*/
 	public function kernels($kernel = null)
 	{
@@ -536,7 +533,7 @@ class Application extends Container implements Contract
 	/**
 	 * Determine if the given kernel has booted.
 	 *
-	 * @param  \TeaPress\Core\Kernel|string  $kernel
+	 * @param  \TeaPress\Contracts\Core\Kernel|string  $kernel
 	 *
 	 * @return bool
 	 */
@@ -551,7 +548,7 @@ class Application extends Container implements Contract
 	/**
 	 * Determine if the given kernel is registered.
 	 *
-	 * @param  \TeaPress\Core\Kernel|string  $kernel
+	 * @param  \TeaPress\Contracts\Core\Kernel|string  $kernel
 	 *
 	 * @return bool
 	 */
@@ -565,7 +562,7 @@ class Application extends Container implements Contract
 	/**
 	 * Determine if the given kernel is running.
 	 *
-	 * @param  \TeaPress\Core\Kernel|string  $kernel
+	 * @param  \TeaPress\Contracts\Core\Kernel|string  $kernel
 	 *
 	 * @return bool
 	 */
@@ -582,26 +579,16 @@ class Application extends Container implements Contract
 	 *
 	 * @param string  $kernel
 	 *
-	 * @return \TeaPress\Core\Kernel
+	 * @return \TeaPress\Contracts\Core\Kernel
 	 */
 	public function createKernel($kernel)
 	{
-		// return new $kernel($this, ($this->bound('signals') ? $this->make('signals') : null) );
-		return new $kernel($this);
-	}
+		$args = [
+			'app' => $this,
+			'signals' => $this->bound('signals') ? $this->make('signals') : null
+		];
 
-	/**
-	 * Mark the given kernel as registered.
-	 *
-	 * @param  \TeaPress\Core\Kernel|string  $kernel
-	 *
-	 * @return void
-	 */
-	protected function markAsRegistered($kernel)
-	{
-		$name = is_string($kernel) ? $kernel : get_class($kernel);
-
-		$this->registeredKernels[$name] = true;
+		return $this->make($kernel, $args);
 	}
 
 	/**
@@ -615,33 +602,35 @@ class Application extends Container implements Contract
 	public function bootKernels(array $kernels, $force = false)
 	{
 		foreach ($kernels as $kernel) {
-			$this->bootKernel($kernel, $force);
+			$this->bootKernel( $this->kernel($kernel), $force);
 		}
 	}
 
 	/**
 	 * Boot the given kernel.
 	 *
-	 * @param  array|string  $kernel
+	 * @param  \TeaPress\Contracts\Core\Kernel  $kernel
 	 * @param  bool  $force
 	 *
 	 * @return void
 	 */
-	public function bootKernel($kernel, $force = false)
+	protected function bootKernel(KernelContract $kernel, $force = false)
 	{
-		$name = is_string($kernel) ? $kernel : get_class($kernel);
+		$name = get_class($kernel);
 
-		if($force || !$this->kernelIsBooted($name)){
-			$instance = $this->kernel($kernel);
-			$instance->boot();
-			$instance->registerAliases();
-		}
+		if(!$force && $this->kernelIsBooted($name))
+			return;
+
+		$this->fireKernelCallbacks($name, 'booting', $kernel);
+
+		$kernel->boot();
+
+		if( method_exists($kernel, 'registerAliases') )
+			$kernel->registerAliases();
 
 		$this->bootedKernels[$name] = true;
 
-		if( $this->isRunning() )
-			$this->register($kernel);
-
+		$this->fireKernelCallbacks($name, 'booted', $kernel);
 	}
 
 	/**
@@ -651,11 +640,11 @@ class Application extends Container implements Contract
 	*
 	* @return void
 	*/
-	public function boot(array $kernels = [])
+	public function boot(array $kernels)
 	{
-		if (!$this->booted){
-			$this->fireAppCallbacks('booting');
-		}
+		if($this->running) return;
+
+		$this->fireAppCallbacks('booting');
 
 		$this->bootKernels($kernels);
 
@@ -676,9 +665,9 @@ class Application extends Container implements Contract
 	}
 
 	/**
-	* Run the application. This will also run all booted kernels.
+	* Run the application. This will run all registered kernels.
 	*
-	* @param  array  $kernels  Kernels to be booted together with the application.
+	* @throws \TeaPress\Core\Exception\ApplicationNotReadyException
 	*
 	* @return void
 	*/
@@ -687,7 +676,7 @@ class Application extends Container implements Contract
 		if($this->running) return;
 
 		if(!$this->booted){
-			throw new BadMethodCallException("Error Running Application. Application not booted.");
+			throw new ApplicationNotReadyException("Error Running Application. Application has not yet been booted.");
 		}
 
 		$this->fireAppCallbacks('before_running');
@@ -710,7 +699,7 @@ class Application extends Container implements Contract
 	protected function runKernels(array $kernels)
 	{
 		foreach ($kernels as $kernel) {
-			$this->runKernel($kernel);
+			$this->runKernel($this->kernel($kernel));
 		}
 	}
 
@@ -718,24 +707,24 @@ class Application extends Container implements Contract
 	/**
 	 * Run the given kernel.
 	 *
-	 * @param  \TeaPress\Core\Kernel|string  $kernel
+	 * @param  \TeaPress\Contracts\Core\Kernel  $kernel
 	 *
-	 * @return bool
+	 * @return void
 	 */
-	protected function runKernel($kernel)
+	protected function runKernel(KernelContract $kernel)
 	{
-		$name = is_string($kernel) ? $kernel : get_class($kernel);
-
-		// if(!$this->kernelIsRegistered($name)){
-		// 	$this->register($name);
-		// }
+		$name = get_class($kernel);
 
 		if($this->kernelIsRunning($name))
 			return;
 
-		$this->kernel($kernel)->run();
+		$this->fireKernelCallbacks($name, 'before_running', $kernel);
 
-		return $this->runningKernels[$name] = true;
+		$kernel->run();
+
+		$this->runningKernels[$name] = true;
+
+		$this->fireKernelCallbacks($name, 'running', $kernel);
 	}
 
 	/**
@@ -752,32 +741,32 @@ class Application extends Container implements Contract
 	/**
 	* Register a new boot listener.
 	*
-	* @param  mixed  $callback
-	* @param  int	$priority
-	* @return void
+	* @param  mixed  		$callback
+	* @param  int  			$priority
+	*
+	* @return bool
 	*/
 	public function booting($callback, $priority = null)
 	{
-		if(!$this->isBooted())
-			return $this->bindAppCallback('booting', $callback, $priority, true);
+		$this->bindAppCallback('booting', $callback, $priority);
 
-		trigger_error('Error binding application booting callback. Application already booted.');
+		return !$this->isBooted();
 	}
 
 	/**
-	 * Register a new "booted" listener.
-	 *
-	 * @param  mixed  $callback
-	 * @return void
-	 */
+	* Register a new "booted" listener.
+	*
+	* @param  mixed  $callback
+	* @param  int	$priority
+	*
+	* @return bool
+	*/
 	public function booted($callback, $priority = null)
 	{
-		$this->bindAppCallback('booted', $callback, $priority, true);
+		$this->bindAppCallback('booted', $callback, $priority);
 
-		if ($this->isBooted())
-			$this->fireAppCallbacks('booted');
+		return !$this->isBooted();
 	}
-
 
 	/**
 	* Register a new before_running listener.
@@ -789,10 +778,9 @@ class Application extends Container implements Contract
 	*/
 	public function beforeRunning($callback, $priority = null)
 	{
-		if(!$this->isRunning())
-			return $this->bindAppCallback('before_running', $callback, $priority, true);
+		$this->bindAppCallback('before_running', $callback, $priority);
 
-		trigger_error('Error binding application "before_running" callback. Application already running.');
+		return !$this->isRunning();
 	}
 
 	/**
@@ -801,38 +789,151 @@ class Application extends Container implements Contract
 	* @param  mixed  $callback
 	* @param  int	$priority
 	*
-	* @return void
+	* @return bool
 	*/
-	public function running($callback, $priority = null)
+	public function afterRunning($callback, $priority = null)
 	{
-		$this->bindAppCallback('running', $callback, $priority, true);
+		$this->bindAppCallback('running', $callback, $priority);
 
-		if ($this->isRunning())
-			$this->fireAppCallbacks('running');
+		return !$this->isRunning();
 	}
+
+
+	/**
+	* Register a callback to run before booting kernel.
+	*
+	* @param  string 	 	$kernel
+	* @param  mixed  		$callback
+	* @param  int  			$priority
+	*
+	* @return bool
+	*/
+	public function beforeBootingKernel($kernel, $callback, $priority = null)
+	{
+		$this->bindKernelCallback($kernel, 'booting', $callback, $priority);
+
+		return !$this->kernelIsBooted($kernel);
+	}
+
+
+	/**
+	* Register a callback to run after booting kernel.
+	*
+	* @param  string 	 	$kernel
+	* @param  mixed  		$callback
+	* @param  int  			$priority
+	*
+	* @return bool
+	*/
+	public function afterBootingKernel($kernel, $callback, $priority = null)
+	{
+		$this->bindKernelCallback($kernel, 'booted', $callback, $priority);
+
+		return !$this->kernelIsBooted($kernel);
+	}
+
+
+	/**
+	* Register a callback to run before registering a kernel.
+	*
+	* @param  string 	 	$kernel
+	* @param  mixed  		$callback
+	* @param  int  			$priority
+	*
+	* @return bool
+	*/
+	public function beforeRegisteringKernel($kernel, $callback, $priority = null)
+	{
+		$this->bindKernelCallback($kernel, 'registering', $callback, $priority);
+
+		return !$this->kernelIsRegistered($kernel);
+	}
+
+
+	/**
+	* Register a callback to run after registering a kernel.
+	*
+	* @param  string 	 	$kernel
+	* @param  mixed  		$callback
+	* @param  int  			$priority
+	*
+	* @return bool
+	*/
+	public function afterRegisteringKernel($kernel, $callback, $priority = null)
+	{
+		$this->bindKernelCallback($kernel, 'registered', $callback, $priority);
+
+		return !$this->kernelIsRegistered($kernel);
+	}
+
+
+	/**
+	* Register a callback to run before running a kernel.
+	*
+	* @param  string 	 	$kernel
+	* @param  mixed  		$callback
+	* @param  int  			$priority
+	*
+	* @return bool
+	*/
+	public function beforeRunningKernel($kernel, $callback, $priority = null)
+	{
+		$this->bindKernelCallback($kernel, 'before_running', $callback, $priority);
+
+		return !$this->kernelIsRunning($kernel);
+	}
+
+	/**
+	* Register a callback to execute after a kernel is run.
+	*
+	* @param  string 	 	$kernel
+	* @param  mixed  		$callback
+	* @param  int  			$priority
+	*
+	* @return bool
+	*/
+	public function afterRunningKernel($kernel, $callback, $priority = null)
+	{
+		$this->bindKernelCallback($kernel, 'running', $callback, $priority);
+
+		return !$this->kernelIsRunning($kernel);
+	}
+
 
 	/**
 	* Bind the given callback to the specified $event.
 	*
+	* @param  string					$event
+	* @param  \Closure|array|string 	$callback
+	* @param  int						$priority
+	*
+	* @return bool
+	*/
+	protected function bindAppCallback($event, $callback, $priority = null)
+	{
+		return $this->signals->bind($this->appEventTag($event), $callback, $priority);
+	}
+
+	/**
+	* Bind the given callback to the specified kernel event.
+	*
+	* @param  string						$kernel
 	* @param  string						$event
 	* @param  \Closure|array|string 		$callback
-	* @param  int						$priority
-	* @param  bool							$once
+	* @param  int							$priority
 	*
-	* @return void
+	* @return bool
 	*/
-	protected function bindAppCallback($event, $callback, $priority = null, $once = false)
+	protected function bindKernelCallback($kernel, $event, $callback, $priority = null)
 	{
-		if($this->bound('signals'))
-			return $this->signals->bind($this->appEventTag($event), $callback, $priority, null, $once);
+		$kernel = is_string($kernel) ? $kernel : get_class($kernel);
 
-		$msg = "Error binding event callback. Signals service is not available. It might be too early to do this.";
-		trigger_error($msg);
+		return $this->signals->bind([$kernel, $event], $callback, $priority);
 	}
 
 
 	/**
-	* Call the booting callbacks for the application.
+	* Call the callbacks for an application event.
 	*
 	* @param  string  $event
 	* @param  mixed  ...$payload
@@ -841,15 +942,30 @@ class Application extends Container implements Contract
 	*/
 	protected function fireAppCallbacks($event, ...$payload)
 	{
-		if($this->bound('signals')){
-			if(!in_array($this, $payload))
-				$payload[] = $this;
+		if(!in_array($this, $payload))
+			$payload[] = $this;
 
-			return $this->signals->fire($this->appEventTag($event), $payload);
+		return $this->signals->fire($this->appEventTag($event), $payload);
+	}
+
+	/**
+	* Call the callbacks for a kernel's event.
+	*
+	* @param  string  $kernel
+	* @param  string  $event
+	* @param  mixed  ...$payload
+	*
+	* @return mixed
+	*/
+	protected function fireKernelCallbacks($kernel, $event, ...$payload)
+	{
+		$kernel = is_string($kernel) ? $kernel : get_class($kernel);
+
+		if(!in_array($this, $payload)){
+			$payload[] = $this;
 		}
 
-		$msg = "Error firing application event. Signals service is not available. It might be too early to do this.";
-		trigger_error($msg);
+		return $this->signals->fire([$kernel, $event], $payload);
 	}
 
 	/**
@@ -910,7 +1026,7 @@ class Application extends Container implements Contract
 	*/
 	public function whenReady($callback, $priority = null)
 	{
-		$this->bindAppCallback('ready', $callback, $priority, true);
+		$this->bindAppCallback('ready', $callback, $priority);
 
 		if ($this->ready)
 			$this->fireAppCallbacks('ready');

@@ -519,6 +519,16 @@ class Manager extends NamespacedItemResolver implements Contract, Filterable, Ar
 	}
 
 	/**
+	 * Get the configuration files loader.
+	 *
+	 * @return \TeaPress\Config\LoaderInterface
+	 */
+	public function getLoader()
+	{
+		return $this->loader;
+	}
+
+	/**
 	 * Get the number of configuration items.
 	 *
 	 * @return int

@@ -5,7 +5,9 @@ namespace TeaPress\Filesystem;
 use Closure;
 use ErrorException;
 use FilesystemIterator;
-use Symfony\Component\Finder\Finder;
+use TeaPress\Utils\Str;
+use TeaPress\Utils\Arr;
+use TeaPress\Filesystem\Finder;
 use Illuminate\Support\Traits\Macroable;
 use TeaPress\Contracts\Filesystem\Filesystem as Contract;
 use Illuminate\Filesystem\Filesystem as IlluminateFilesystem;
@@ -47,14 +49,17 @@ class Filesystem extends IlluminateFilesystem implements Contract
 	 * Get the returned value of a file.
 	 *
 	 * @param  string  $path
+	 * @param  array  $data
 	 * @return mixed
 	 *
 	 * @throws \TeaPress\Filesystem\FileNotFoundException
 	 */
-	public function getRequire($path)
+	public function getRequire($path, $data = [])
 	{
-		return $this->requireScript();
+		return $this->require($path, $data);
 	}
+
+
 
 	/**
 	 * Require the given file while exposing the provided data.
@@ -89,6 +94,39 @@ class Filesystem extends IlluminateFilesystem implements Contract
 	}
 
 	/**
+	 * Require all .php files from the given paths while exposing the provided data.
+	 * If a file does not exist or a path is broken, a FileNotFoundException exception is thrown.
+	 *
+	 * @param  string|array  $paths
+	 * @param  array  $data
+	 * @param  bool  $once
+	 *
+	 * @throws \TeaPress\Filesystem\FileNotFoundException
+	 *
+	 * @return array
+	 */
+	public function requireAll($paths, $data = [], $once = false)
+	{
+		return $this->requireScriptsFromPaths($paths, $data, $once);
+	}
+
+	/**
+	 * Require all .php files once (require_once) from the given paths while exposing the provided data.
+	 * If a file does not exist or a path is broken, a FileNotFoundException exception is thrown.
+	 *
+	 * @param  string|array  $paths
+	 * @param  array  $data
+	 *
+	 * @throws \TeaPress\Filesystem\FileNotFoundException
+	 *
+	 * @return array
+	 */
+	public function requireAllOnce($paths, $data = [])
+	{
+		return $this->requireScriptsFromPaths($paths, $data, true);
+	}
+
+	/**
 	 * Require the given file while exposing the provided data.
 	 * If the file does not exist, the $default will be returned if provided. Otherwise an error will be thrown.
 	 *
@@ -98,6 +136,7 @@ class Filesystem extends IlluminateFilesystem implements Contract
 	 * @param  mixed  $__default
 	 *
 	 * @throws \TeaPress\Filesystem\FileNotFoundException
+	 *
 	 * @return mixed
 	 */
 	protected function requireScript($__script, $__data = [], $__once=false, $__default=NOTHING)
@@ -106,7 +145,7 @@ class Filesystem extends IlluminateFilesystem implements Contract
 		if( !$this->isFile($__script) ){
 
 			if($__default === NOTHING){
-				throw new FileNotFoundException("Failed opening required file '{$__script}'. No such file.");
+				throw new FileNotFoundException("Failed requiring file(s). Path '{$__script}' is not a valid file.");
 			}
 			else{
 				if($__default instanceof Closure)
@@ -119,6 +158,64 @@ class Filesystem extends IlluminateFilesystem implements Contract
 		extract( (array) $__data );
 		return $__once ? require_once($__script) : require($__script);
 	}
+
+	/**
+	 * Require all .php files from the given paths while exposing the provided data.
+	 * If a file does not exist or a path is broken, a FileNotFoundException exception is thrown.
+	 *
+	 * @param  string $___paths
+	 * @param  array  $___data
+	 * @param  bool  $___once
+	 *
+	 * @throws \TeaPress\Filesystem\FileNotFoundException
+	 *
+	 * @return array
+	 */
+	protected function requireScriptsFromPaths($___paths, $___data = [], $___once=false)
+	{
+		extract( (array) $___data );
+
+		$___results = [];
+
+		foreach ((array) $___paths as $___i => $___path) {
+
+			$___files = $this->isDirectory($___path)
+					? $this->files($___path, true, ['*.php', '*.html']) : [$___path];
+
+			foreach ( $___files as $___file) {
+
+				if(!$this->isFile($___file))
+					throw new FileNotFoundException("Failed requiring file(s). Path '{$___file}' is not a valid file or directory.");
+
+				$___key = $this->parsePathToKey( $___file, ($___file === $___path ? dirname($___path) : $___path ) );
+
+				Arr::set($___results[$___i], $___key, ($___once ? require_once( $___file ) : require( $___file )) );
+			}
+		}
+
+		return is_array($___paths) ? $___results : Arr::first($___results, null, []);
+	}
+
+
+	protected function parsePathToKey($path, $base = '')
+	{
+		$slash = DIRECTORY_SEPARATOR;
+
+		$path = trim($path, $slash);
+		$base = trim($base, $slash);
+
+		$key = strtolower(substr($path, Str::length($base)));
+
+		foreach (['.php', '.html'] as $ext) {
+			if( Str::endsWith($key, $ext) ){
+				$key = substr($key, 0,  (-1 * Str::length($ext) ) );
+			}
+		}
+
+		return str_replace($slash,'.', trim($key, $slash));
+	}
+
+
 
 	/**
 	 * Write the contents of a file.
@@ -324,34 +421,89 @@ class Filesystem extends IlluminateFilesystem implements Contract
 	/**
 	 * Get an array of all files in a directory.
 	 *
-	 * @param  string  $directory
+	 * Provide a boolean value (true/false) for recursive to turn it on/off,
+	 * an integer or string expression to specify the search depth.
+	 *
+	 * You can pass filters to customize the search results.
+	 *
+	 * For example :
+	 * 		$filters = ['name' => '*.php', 'path' => ['src', 'tests' ] ]
+	 * 	Searches for files with a .php extension whose path consists of a
+	 * 	directory/sub-directory named 'src' or 'tests'.
+	 *
+	 * You can provide an array of filters with string keys as the finder's method to be
+	 * called with the value passed as a parameter.
+	 *
+	 * If a string or integer indexed array is provided, the finder's 'name' method is used.
+	 * So all the following will return the same results
+	 * 		$filters = '*.txt'
+	 * 		$filters = ['*.txt']
+	 * 		$filters = ['name' => '*.txt']
+	 *
+	 * Valid filter methods methods are basically all methods in
+	 * Symfony\Component\Finder\Finder and \TeaPress\Filesystem\Finder
+	 * classes that return a Finder instance.
+	 *
+	 * You can specify a string (for one) or an array of snake_cased properties to retrieve
+	 * from from the file info (SplFileInfo) object. Though SplFileInfo has no public properties,
+	 * the properties will be retrieved by calling the respective getter method(s).
+	 * If properties is false (bool) the entire SplFileInfo objects are returned.
+	 *
+	 * 		How it works:
+	 * 			Property			Method Called
+	 * 			basename			: SplFileInfo::getBasename();
+	 * 			real_path			: SplFileInfo::getRealPath();
+	 * 			is_dir				: SplFileInfo::isDir();
+	 *
+	 * 		You can refer to \TeaPress\Filesystem\Finder for more info
+	 *
+	 *
+	 * @param  string  				$directory
+	 * @param  bool|int|string		$recursive 		true/false = on/off. Int/string for a search depth.
+	 * @param  string|array|null	$filters 		Check above.
+	 * @param  string|array|bool	$properties		The properties to retrieve.
+	 * @param  int 					$limit 			Limit the number of files retrieved.
+	 *
 	 * @return array
+	 *
 	 */
-	public function files($directory)
+	public function files($directory, $recursive = false, $filters = null, $properties = null, $limit = null)
 	{
-		$glob = glob($directory.'/*');
+		$depth = !is_bool($recursive) ? $recursive : ($recursive ? null : 0);
 
-		if ($glob === false) {
-			return [];
+		$finder = $this->findFiles($directory, $depth);
+
+		if(is_string($filters)){
+			$filters = ['name' => $filters];
 		}
 
-		// To get the appropriate files, we'll simply glob the directory and filter
-		// out any "files" that are not truly files so we do not end up with any
-		// directories in our list, but only true files within the directory.
-		return array_filter($glob, function ($file) {
-			return filetype($file) == 'file';
-		});
+		foreach ( (array) $filters as $method => $patterns) {
+
+			$method = Str::camel( is_string($method) ? $method : 'name');
+
+			foreach ((array) $patterns as $pattern) {
+				$finder->{$method}($pattern);
+			}
+		}
+
+		$properties = $properties === false ? null : (is_null($properties) ? 'pathname' : $properties);
+
+		return $finder->get($properties, $limit);
 	}
 
 	/**
 	 * Get all of the files from the given directory (recursive).
+	 * You can specify the properties to retrieve.
+	 * Returns entire SplFileInfo object if properties = null.
 	 *
-	 * @param  string  $directory
+	 * @param  string|null 			$directory
+	 * @param  string|array|null	$properties
+	 *
 	 * @return array
 	 */
-	public function allFiles($directory)
+	public function allFiles($directory, $properties = null)
 	{
-		return iterator_to_array($this->findFiles($directory), false);
+		return $this->findFiles($directory)->get($properties);
 	}
 
 	/**
@@ -359,7 +511,8 @@ class Filesystem extends IlluminateFilesystem implements Contract
 	 *
 	 * @param  string  $directory
 	 * @param  int|null  $depth
-	 * @return array
+	 *
+	 * @return \TeaPress\Filesystem\Finder
 	 */
 	public function findFiles($directory, $depth = null)
 	{
@@ -372,42 +525,105 @@ class Filesystem extends IlluminateFilesystem implements Contract
 	/**
 	 * Get all of the directories within a given directory.
 	 *
-	 * @param  string  $directory
+	 * Provide a boolean value (true/false) for recursive to turn it on/off,
+	 * an integer or string expression to specify the search depth.
+	 *
+	 * You can pass filters to customize the search results.
+	 *
+	 * For example :
+	 * 		$filters = ['name' => 'prefix_*', 'path' => ['src', 'tests' ] ]
+	 * 	Searches for directories whose names start with a 'prefix_' and whose path consists of a
+	 * 	directory/sub-directory named 'src' or 'tests'.
+	 *
+	 * You can provide an array of filters with string keys as the finder's method to be
+	 * called with the value passed as a parameter.
+	 *
+	 * If a string or integer indexed array is provided, the finder's 'name' method is used.
+	 * So all the following will return the same results
+	 * 		$filters = '*_suffix'
+	 * 		$filters = ['*_suffix']
+	 * 		$filters = ['name' => '*_suffix']
+	 *
+	 * Valid filter methods methods are basically all methods in
+	 * Symfony\Component\Finder\Finder and \TeaPress\Filesystem\Finder
+	 * classes that return a Finder instance.
+	 *
+	 * You can specify a string (for one) or an array of snake_cased properties to retrieve
+	 * from from the file info (SplFileInfo) object. Though SplFileInfo has no public properties,
+	 * the properties will be retrieved by calling the respective getter method(s).
+	 * If properties is false (bool) the entire SplFileInfo objects are returned.
+	 *
+	 * 		How it works:
+	 * 			Property			Method Called
+	 * 			basename			: SplFileInfo::getBasename();
+	 * 			real_path			: SplFileInfo::getRealPath();
+	 * 			is_dir				: SplFileInfo::isDir();
+	 *
+	 * 		You can refer to \TeaPress\Filesystem\Finder for more info
+	 *
+	 *
+	 * @param  string  				$directory
+	 * @param  bool|int|string		$recursive 		true/false = on/off. Int/string for a search depth.
+	 * @param  string|array|null	$filters 		Check above.
+	 * @param  string|array|bool	$properties		The properties to retrieve.
+	 * @param  int 					$limit 			Limit the number of directories retrieved.
+	 *
 	 * @return array
 	 */
-	public function directories($directory)
+	public function directories($directory, $recursive = false, $filters = null, $properties = null, $limit = null)
 	{
-		$directories = [];
+		$depth = !is_bool($recursive) ? $recursive : ($recursive ? null : 0);
 
-		foreach ($this->findDirs($directory, 0) as $dir) {
-			$directories[] = $dir->getPathname();
+		$finder = $this->findDirs($directory, $depth);
+
+		if(is_string($filters)){
+			$filters = ['name' => $filters];
 		}
 
-		return $directories;
+		foreach ( (array) $filters as $method => $patterns) {
+
+			$method = Str::camel( is_string($method) ? $method : 'name');
+
+			foreach ((array) $patterns as $pattern) {
+				$finder->{$method}($pattern);
+			}
+		}
+
+		$properties = $properties === false ? null : (is_null($properties) ? 'pathname' : $properties);
+
+		return $finder->get($properties, $limit);
 	}
 
 
 
 	/**
 	 * Get all (recursive) of the directories within a given directory.
+	 * You can specify the properties to retrieve.
+	 * Returns entire SplFileInfo object if properties = null.
 	 *
-	 * @param  string|null  $directory
+	 * @param  string|null 			$directory
+	 * @param  string|array|null	$properties
+	 *
 	 * @return array
 	 */
-	public function allDirs($directory)
+	public function allDirs($directory, $properties = null)
 	{
-		return $this->allDirectories($directory);
+		return $this->allDirectories($directory, $properties);
 	}
 
 	/**
 	 * Get all (recursive) of the directories within a given directory.
+	 * You can specify the properties to retrieve.
+	 * Returns entire SplFileInfo object if properties = null.
 	 *
-	 * @param  string|null  $directory
+	 * @param  string|null 			$directory
+	 * @param  string|array|null	$properties
+	 *
 	 * @return array
 	 */
-	public function allDirectories($directory)
+	public function allDirectories($directory, $properties = null)
 	{
-		return iterator_to_array($this->findDirs($directory), false);
+		return $this->findDirs($directory)->get($properties);
 	}
 
 	/**
@@ -415,7 +631,8 @@ class Filesystem extends IlluminateFilesystem implements Contract
 	 *
 	 * @param  string  	$path
 	 * @param  int 		$depth
-	 * @return array
+	 *
+	 * @return \TeaPress\Filesystem\Finder
 	 */
 	public function findDirs($path, $depth = null)
 	{
@@ -549,7 +766,7 @@ class Filesystem extends IlluminateFilesystem implements Contract
 	/**
 	 * Create a Finder instance
 	 *
-	 * @throws \Symfony\Component\Finder\Finder
+	 * @throws \TeaPress\Filesystem\Finder
 	 */
 	public function finder()
 	{

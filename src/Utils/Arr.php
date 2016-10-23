@@ -139,7 +139,7 @@ class Arr extends BaseArr
 	public static function first($array, callable $callback = null, $default = null)
 	{
 		if (is_null($callback)) {
-			if (empty($array)) {
+			if (count($array) === 0) {
 				return value($default);
 			}
 
@@ -169,7 +169,7 @@ class Arr extends BaseArr
 	public static function last($array, callable $callback = null, $default = null)
 	{
 		if(is_null($callback)){
-			return empty($array) ? value($default) : end($array);
+			return count($array) > 0 ? end($array) : value($default);
 		}
 
 		return static::first(array_reverse($array), $callback, $default);
