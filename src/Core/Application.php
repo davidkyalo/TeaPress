@@ -527,6 +527,8 @@ class Application extends Container implements Contract
 		if(is_null($kernel))
 			return $this->kernels;
 
+		$kernel = is_string($kernel) ? $kernel : get_class($kernel);
+
 		return isset($this->kernels[$kernel]) ? $this->kernels[$kernel] : null;
 	}
 

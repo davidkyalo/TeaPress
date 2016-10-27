@@ -3,6 +3,7 @@ namespace TeaPress\Http\Cookies;
 
 
 use ArrayIterator;
+use IteratorAggregate;
 use InvalidArgumentException;
 use TeaPress\Utils\Carbon\TimeDelta;
 use TeaPress\Contracts\Http\Request;
@@ -11,7 +12,7 @@ use TeaPress\Contracts\Utils\ArrayBehavior;
 use TeaPress\Contracts\Http\Cookies\CookieJar as Contract;
 use Symfony\Component\HttpFoundation\Cookie as BaseCookie;
 
-class CookieJar implements Contract, ArrayBehavior, Arrayable
+class CookieJar implements Contract, ArrayBehavior, Arrayable, IteratorAggregate
 {
 
 	protected $request;
@@ -435,6 +436,11 @@ class CookieJar implements Contract, ArrayBehavior, Arrayable
 	public function offsetUnset($key)
 	{
 		$this->remove($key);
+	}
+
+	public function offsets()
+	{
+		return array_keys($this->all());
 	}
 
 	public function count()

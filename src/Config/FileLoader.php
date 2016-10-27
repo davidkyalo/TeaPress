@@ -171,4 +171,14 @@ class FileLoader implements LoaderInterface
 	{
 		return isset($this->namespaces[$namespace]);
 	}
+
+	/**
+	 * Get all registered namespaces.
+	 *
+	 * @return array
+	 */
+	public function namespaces()
+	{
+		return $this->namespaces;
+	}
 }

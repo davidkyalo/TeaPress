@@ -1,6 +1,7 @@
 <?php
 namespace TeaPress\Core\Bootstrap;
 
+use TeaPress\Core\AliasLoader;
 use TeaPress\Contracts\Core\Application;
 
 class LoadTeaPress

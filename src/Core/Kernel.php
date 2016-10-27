@@ -20,6 +20,11 @@ abstract class Kernel implements Contract
 	 */
 	protected $signals;
 
+	/**
+	 * @var bool
+	 */
+	protected $defer = false;
+
 
 	/**
 	 * Creates the kernel instance.
@@ -31,6 +36,11 @@ abstract class Kernel implements Contract
 	 */
 	public function __construct(ContainerContract $app, Signals $signals = null)
 	{
+		$name = get_class($this);
+
+		if($app->kernels($name))
+			trigger_error("Multiple instances of kernel {$name} created.");
+
 		$this->app = $app;
 		$this->signals = $signals;
 		$this->initialize();
@@ -261,5 +271,16 @@ abstract class Kernel implements Contract
 	public function running($callback, $priority = null)
 	{
 		return $this->app->afterRunningKernel(get_class($this), $callback, $priority);
+	}
+
+
+	/**
+	 * Clone method.
+	 *
+	 * @return void
+	 */
+	private function __clone()
+	{
+		//
 	}
 }

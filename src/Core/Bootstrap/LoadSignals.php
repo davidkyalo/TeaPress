@@ -14,7 +14,9 @@ class LoadSignals
 	*/
 	public function bootstrap(Application $app)
 	{
-		$app->register('TeaPress\Config\SignalsKernel');
+		$app->instance('signals', $signals = new \TeaPress\Signals\Hub($app) );
+
+		$app->register('TeaPress\Signals\SignalsKernel');
 
 		$signals = $app->make('signals');
 

@@ -3,6 +3,7 @@
 namespace TeaPress\Config;
 
 use ArrayIterator;
+use IteratorAggregate;
 use TeaPress\Utils\Arr;
 use TeaPress\Contracts\Utils\Arrayable;
 use TeaPress\Contracts\Config\Filterable;
@@ -10,7 +11,7 @@ use TeaPress\Contracts\Utils\ArrayBehavior;
 use TeaPress\Contracts\Signals\Hub as Signals;
 use TeaPress\Contracts\Config\Repository as Contract;
 
-class Repository implements Contract, Filterable, ArrayBehavior, Arrayable
+class Repository implements Contract, Filterable, ArrayBehavior, Arrayable, IteratorAggregate
 {
 	/**
 	 * The Signals Hub
@@ -420,5 +421,16 @@ class Repository implements Contract, Filterable, ArrayBehavior, Arrayable
 	public function offsetUnset($key)
 	{
 		$this->set($key, null);
+	}
+
+
+	/**
+	 * Get all the registered repository names.
+	 *
+	 * @return array
+	 */
+	public function offsets()
+	{
+		return array_keys($this->items);
 	}
 }

@@ -42,4 +42,11 @@ interface LoaderInterface
 	 * @return void
 	 */
 	public function addNamespace($namespace, $paths);
+
+	/**
+	 * Get all registered namespaces.
+	 *
+	 * @return array
+	 */
+	public function namespaces();
 }

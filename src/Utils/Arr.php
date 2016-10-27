@@ -2,7 +2,13 @@
 
 namespace TeaPress\Utils;
 
+use IteratorAggregate;
 use Illuminate\Support\Arr as BaseArr;
+use Illuminate\Contracts\Support\Jsonable;
+use Illuminate\Contracts\Support\Arrayable;
+use TeaPress\Contracts\Utils\ArrayBehavior;
+use Illuminate\Support\Collection as IlluminateCollection;
+
 
 class Arr extends BaseArr
 {
@@ -107,6 +113,10 @@ class Arr extends BaseArr
 	{
 		$target = (array) static::get($array, $key, []);
 
+		foreach ($items as &$item) {
+			$item = static::cast($item);
+		}
+
 		return static::set($array, $key, array_merge_recursive( $target, ...$items) );
 	}
 
@@ -116,13 +126,17 @@ class Arr extends BaseArr
 	 * @param  array   $array
 	 * @param  string|array  $key 	A string key using "dot" notation eg. root.target
 	 * 								Or an array of ['key', 'notation'] for different notation eg. [ 'root->target', '->' ]
-	 * @param  array  ...$items
+	 * @param  arrays  ...$items
 	 *
 	 * @return array
 	 */
 	public static function extend(&$array, $key, array ...$items)
 	{
 		$target = (array) static::get($array, $key, []);
+
+		foreach ($items as &$item) {
+			$item = static::cast($item);
+		}
 
 		return static::set($array, $key, array_merge( $target, ...$items) );
 	}
@@ -189,7 +203,7 @@ class Arr extends BaseArr
 		$results = [];
 
 		foreach ($array as $key => $value) {
-			if ( is_array($value) && (!$depth || $depth > $level))
+			if ( (is_array($value) || ($value instanceof IteratorAggregate) ) && (!$depth || $depth > $level))
 				$results = array_merge( $results, static::flatten($value, $depth, $level+1) );
 			else
 				$results[] = $value;
@@ -480,6 +494,47 @@ class Arr extends BaseArr
 		return $array;
 	}
 
+
+	/**
+	 * Try casting the given object to an array
+	 *
+	 * @param  mixed  $object
+	 * @param  bool   $force
+	 *
+	 * @return array|false
+	 */
+	public static function cast($object, $force = true)
+	{
+		if(is_array($object)){
+			return $object;
+		}
+		elseif ($object instanceof IlluminateCollection){
+			return $object->all();
+		}
+		elseif ($object instanceof IteratorAggregate){
+			$array = [];
+			foreach ($object as $key => $value)
+				$array[$key] = $value;
+
+			return $array;
+		}
+		elseif($object instanceof ArrayBehavior){
+			$array = [];
+			foreach ($object->offsets() as $offset)
+				$array[$offset] = $object[$offset];
+
+			return $array;
+		}
+		elseif ($object instanceof Arrayable){
+			return $object->toArray();
+		}
+		elseif ($force && ($object instanceof Jsonable)){
+			return json_decode($object->toJson(), true);
+		}
+
+		return $force ? (array) $object : false;
+	}
+
 	protected static function parseKey($key, $notation = '.')
 	{
 		if($notation === NOTHING)
@@ -496,5 +551,6 @@ class Arr extends BaseArr
 		$msg ='Key ['.$key.']. Pass the notation with the key as an array ["key","notation"] instead. Eg. ["root.array->child->target", "->"] to use "->" as the notation.';
 		_deprecated_argument($method, '0.1.0', $msg);
 	}
+
 }
 

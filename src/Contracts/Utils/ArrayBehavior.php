@@ -3,8 +3,13 @@ namespace TeaPress\Contracts\Utils;
 
 use Countable;
 use ArrayAccess;
-use IteratorAggregate;
 
-interface ArrayBehavior extends ArrayAccess, Countable, IteratorAggregate {
+interface ArrayBehavior extends ArrayAccess, Countable {
 
+	/**
+	 * Get an array of all the offsets (keys)
+	 *
+	 * @return array
+	 */
+	public function offsets();
 }

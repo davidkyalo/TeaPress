@@ -1,6 +1,6 @@
 <?php
 
-namespace TeaPress\Arch;
+namespace TeaPress\Core;
 
 class AliasLoader
 {

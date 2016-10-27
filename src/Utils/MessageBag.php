@@ -7,6 +7,8 @@ use WP_Error;
 use Exception;
 use ArrayIterator;
 use JsonSerializable;
+use IteratorAggregate;
+use TeaPress\Utils\Arr;
 use BadMethodCallException;
 use TeaPress\Contracts\Utils\Jsonable;
 use TeaPress\Contracts\Utils\Arrayable;
@@ -15,7 +17,8 @@ use TeaPress\Contracts\Utils\MessageProvider;
 use TeaPress\Contracts\Utils\MessageBag as Contract;
 
 
-class MessageBag extends WP_Error implements Contract, ArrayBehavior, Arrayable, Jsonable, JsonSerializable, MessageProvider {
+class MessageBag extends WP_Error implements Contract, ArrayBehavior, Arrayable, Jsonable, JsonSerializable, MessageProvider, IteratorAggregate
+{
 
 	const EMPTY_MESSAGE_FLAG = "__MESSAGE__";
 	const DEFAULT_KEY = '-';
@@ -279,25 +282,35 @@ class MessageBag extends WP_Error implements Contract, ArrayBehavior, Arrayable,
 		}
 	}
 
-	public function __set($key, $message){
+	public function __set($key, $message)
+	{
 		$this->add($key, $message);
 	}
 
 
-	public function offsetExists($key){
+	public function offsetExists($key)
+	{
 		return $this->has($key);
 	}
 
-	public function offsetGet($key){
+	public function offsetGet($key)
+	{
 		return $this->get($key);
 	}
 
-	public function offsetSet($key, $value){
+	public function offsetSet($key, $value)
+	{
 		return $this->add($key, $value);
 	}
 
-	public function offsetUnset($key){
+	public function offsetUnset($key)
+	{
 		$this->remove($key);
+	}
+
+	public function offsets($key)
+	{
+		return $this->keys();
 	}
 
 	/**
@@ -331,13 +344,16 @@ class MessageBag extends WP_Error implements Contract, ArrayBehavior, Arrayable,
 		elseif ($messages instanceof MessageProvider) {
 			$messages = $messages->getMessageBag()->getMessages();
 		}
+		else
+			$messages = Arr::cast($messages);
 
-		foreach ((array) $messages as $k => $m) {
+		foreach ( $messages as $k => $m) {
 			$this->add( $k, $m );
 		}
 
-		if(!empty($data))
+		if(!empty($data)){
 			$this->message_data = array_merge_recursive($this->message_data, $data);
+		}
 
 		return $this;
 	}

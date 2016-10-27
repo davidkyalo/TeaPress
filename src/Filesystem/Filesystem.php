@@ -62,18 +62,25 @@ class Filesystem extends IlluminateFilesystem implements Contract
 
 
 	/**
-	 * Require the given file while exposing the provided data.
+	 * Evaluate the given file while exposing the provided data as variables on it's global scope.
 	 * If the file does not exist, the $default will be returned if provided. Otherwise an error will be thrown.
+	 * A scope object can be provided
 	 *
-	 * @param  string  $file
-	 * @param  array  $data
-	 * @param  mixed  $default
+	 * @param  string 				$file
+	 * @param  object|null|array 	$scope
+	 * @param  array 				$data
+	 * @param  mixed 				$default
 	 *
 	 * @throws \TeaPress\Filesystem\FileNotFoundException
 	 * @return mixed
 	 */
 	public function requireOnce($file, $data = [], $default = NOTHING)
 	{
+		// if(is_array($scope)){
+		// 	$default = $data;
+		// 	$data = &$scope;
+		// 	$scope = Arr::pull($data, 'this', null);
+		// }
 		return $this->requireScript($file, $data, true, $default);
 	}
 
@@ -139,7 +146,7 @@ class Filesystem extends IlluminateFilesystem implements Contract
 	 *
 	 * @return mixed
 	 */
-	protected function requireScript($__script, $__data = [], $__once=false, $__default=NOTHING)
+	protected function requireScript($__script, &$__data = [], $__once=false, $__default=NOTHING)
 	{
 
 		if( !$this->isFile($__script) ){
@@ -157,6 +164,24 @@ class Filesystem extends IlluminateFilesystem implements Contract
 
 		extract( (array) $__data );
 		return $__once ? require_once($__script) : require($__script);
+	}
+
+
+	/**
+	 * Require all .php files from the given paths while exposing the provided data.
+	 * If a file does not exist or a path is broken, a FileNotFoundException exception is thrown.
+	 *
+	 * @param  string $___paths
+	 * @param  array  $___data
+	 * @param  bool  $___once
+	 *
+	 * @throws \TeaPress\Filesystem\FileNotFoundException
+	 *
+	 * @return array
+	 */
+	protected function getSctiptEvaluator()
+	{
+
 	}
 
 	/**

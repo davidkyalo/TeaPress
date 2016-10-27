@@ -12,6 +12,7 @@ use TeaPress\Core\Exception\ApplicationNotReadyException;
 abstract class Factory
 {
 	use Online;
+
 	/**
 	 * @var string
 	 */
@@ -103,17 +104,17 @@ abstract class Factory
 	{
 		$this->setApp( (is_object($app) ? $app : $this->createApp($app)) );
 
-		$this->initialized();
-
 		$this->executeBaseBootstrappers();
+
+		$this->initialize();
 	}
 
 	/**
-	* Setup the factory before bootstrapping.
+	* Initialize the factory before bootstrapping.
 	*
 	* @return void
 	*/
-	protected function initialized()
+	protected function initialize()
 	{
 		//
 	}
@@ -151,6 +152,32 @@ abstract class Factory
 	{
 		$appClass = $appClass ?: $this->appClass;
 		return new $appClass;
+	}
+
+	/**
+	* Set the application's base path.
+	*
+	* @param  string $path
+	*
+	* @return void
+	*/
+	public function setBasePath($path)
+	{
+		if($this->bootstrapped){
+			trigger_error("Late setting of the application base path. Application already bootstrapped.");
+		}
+
+		$this->app->setBasePath($path);
+	}
+
+	/**
+	* Get the application's base path.
+	*
+	* @return string
+	*/
+	public function basePath()
+	{
+		$this->app->basePath();
 	}
 
 	/**
@@ -383,7 +410,7 @@ abstract class Factory
 
 		$callback = [$this, '_executeLazyBootstrappersCallback'];
 
-		if($this->eventHasFired($event)){
+		if($this->eventWasFired($event)){
 			call_user_func($callback);
 		}
 		else{
@@ -535,8 +562,8 @@ abstract class Factory
 			}
 
 			return method_exists($this, $method)
-					? $this->{$method}( Str::snake($key), ...$args );
-					? $this->app->{$method}( Str::snake($key), ...$args );
+					? $this->{$method}( Str::snake($key), ...$args )
+					: $this->app->{$method}( Str::snake($key), ...$args );
 		}
 
 		throw new BadMethodCallException("Call to undefined method '{$method}' not in factory.");

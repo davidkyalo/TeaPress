@@ -51,12 +51,11 @@ class FilesystemTest extends ServiceTestCase
 
 	public function testRequireOnce()
 	{
-		$path = __DIR__.'/data/return_passed_data.php';
+		$path = __DIR__.'/data/required_once.php';
+		$this->files->require($path, ['passed_data' => "Data"]);
 
-		$count = $this->files->requireOnce($path, ['passed_data' => 1]);
-		$count = $this->files->requireOnce($path, ['passed_data' => 200]);
-
-		$this->assertEquals(1, $count);
+		$result = $this->files->requireOnce($path, ['passed_data' => "Data"]);
+		$this->assertTrue($result);
 	}
 
 	public function testFindFiles()

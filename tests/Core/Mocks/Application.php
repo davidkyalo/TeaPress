@@ -1,7 +1,7 @@
 <?php
 namespace TeaPress\Tests\Core\Mocks;
 
-
+use TeaPress\Tests\Core\Mocks\Kernels\Base as BaseKernel;
 use TeaPress\Core\Application as BaseApplication;
 
 class Application extends BaseApplication
@@ -21,5 +21,11 @@ class Application extends BaseApplication
 	public function fireTestAppCallbacks($event, ...$payload)
 	{
 		return $this->fireAppCallbacks($event, ...$payload);
+	}
+
+	public function flush()
+	{
+		parent::flush();
+		$this->registeredKernels = [];
 	}
 }
