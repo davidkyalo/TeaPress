@@ -89,7 +89,7 @@ class FileLoader implements LoaderInterface
 		$file = "{$this->path}/vendor/{$namespace}/{$locale}/{$group}.php";
 
 		if ($this->files->exists($file)) {
-			return array_replace_recursive($lines, $this->files->getRequire($file));
+			return array_replace_recursive($lines, $this->loadFile($file));
 		}
 
 		return $lines;
@@ -105,7 +105,21 @@ class FileLoader implements LoaderInterface
 	 */
 	protected function loadPath($path, $locale, $group)
 	{
-		return $this->files->require("{$path}/{$locale}/{$group}.php", [], []);
+		return $this->loadFile("{$path}/{$locale}/{$group}.php");
+	}
+
+	/**
+	 * Load the configurations from the given file.
+	 *
+	 * @param  string  $filename
+	 * @param  mixed  $default
+	 *
+	 * @return array|mixed
+	 */
+	public function loadFile($filename, $default = NOTHING)
+	{
+		return $default === NOTHING || $this->files->isReadableFile($filename)
+				? $this->files->require($filename, []) : value($default);
 	}
 
 	/**
