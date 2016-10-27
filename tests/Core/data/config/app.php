@@ -1,4 +1,5 @@
 <?php
+
 return [
 	'kernels' => [
 		"TeaPress\Tests\Core\Mocks\Kernels\KernelOne",

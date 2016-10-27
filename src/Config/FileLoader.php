@@ -44,9 +44,10 @@ class FileLoader implements LoaderInterface
 	 *
 	 * @return array|mixed
 	 */
-	public function loadFile($filename, $default = [])
+	public function loadFile($filename, $default = NOTHING)
 	{
-		return $this->files->require($filename, [], $default);
+		return $default === NOTHING || $this->files->isReadableFile($filename)
+				? $this->files->require($filename, []) : value($default);
 	}
 
 	/**
@@ -83,7 +84,7 @@ class FileLoader implements LoaderInterface
 				}
 			}
 			else{
-				$config = $this->loadFile($path, []);
+				$config = $this->loadFile($path);
 			}
 		}
 		return is_null($basekey) ? $config : [ $basekey => $config ];

@@ -33,18 +33,12 @@ class FilesystemTest extends ServiceTestCase
 		$this->files->require($path);
 	}
 
-	public function testRequireMissingScriptDefault()
-	{
-		$path ='/x_x_x_x/some/fake/script.php';
-		$this->assertNull( $this->files->require($path, null, null) );
-	}
-
 	public function testRequireScriptWithData()
 	{
 		$path = __DIR__.'/data/return_passed_data.php';
 		$passed_data = 'This was passed to the script';
 
-		$result = $this->files->require($path,compact('passed_data'));
+		$result = $this->files->require($path, compact('passed_data'));
 
 		$this->assertEquals( $passed_data, $result );
 	}
@@ -83,9 +77,7 @@ class FilesystemTest extends ServiceTestCase
 	{
 		$fsys = $this->files;
 		$path = __DIR__ .'/data';
-
-		$results = $this->files->requireAll($path, ['passed_data' => 'I was just passed']);
-
-		// pprint("Results", $results);
+		$results = $this->files->requireAllOnce($path, ['passed_data' => 'I was just passed']);
 	}
+
 }

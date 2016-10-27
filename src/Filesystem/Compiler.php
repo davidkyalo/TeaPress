@@ -5,6 +5,7 @@ use Closure;
 use ArrayIterator;
 use RuntimeException;
 use IteratorAggregate;
+use TeaPress\Utils\Arr;
 use BadMethodCallException;
 use InvalidArgumentException;
 use TeaPress\Contracts\Utils\Arrayable;
@@ -50,10 +51,10 @@ class Compiler implements ArrayBehavior, Arrayable, IteratorAggregate
 	protected $__isComplied = false;
 
 	/**
-	 * Create the script instance.
+	 * Create the compiler instance.
 	 *
 	 * @param \TeaPress\Filesystem\Filesystem 	$filesystem
-	 * @param string|array						$path
+	 * @param string							$path
 	 * @param mixed 							$scope
 	 * @param array 							$vars
 	 *
@@ -78,7 +79,7 @@ class Compiler implements ArrayBehavior, Arrayable, IteratorAggregate
 	 * @throws \InvalidArgumentException
 	 * @return bool
 	 */
-	protected function isValidScopeObject($scope, $silent = true)
+	public static function isValidScopeObject($scope, $silent = true)
 	{
 		$valid = ( is_object($scope) || (is_string($scope) && class_exists($scope)) );
 
@@ -119,22 +120,6 @@ class Compiler implements ArrayBehavior, Arrayable, IteratorAggregate
 	public function path()
 	{
 		return $this->__path;
-	}
-
-	/**
-	 * Set the return value of the  current path.
-	 *
-	 * @param mixed 		$returns
-	 *
-	 * @return static
-	 */
-	public function setReturns($returns)
-	{
-		if($returns === 1) $returns = null;
-
-		$this->__returns = $returns;
-
-		return $this;
 	}
 
 	/**
@@ -187,6 +172,23 @@ class Compiler implements ArrayBehavior, Arrayable, IteratorAggregate
 	}
 
 	/**
+	 * Set the return value of the  current path.
+	 *
+	 * @param mixed 		$returns
+	 *
+	 * @return static
+	 */
+	public function setReturns($returns)
+	{
+		if (is_array($returns) && Arr::isAssoc($returns))
+			$this->merge($returns);
+		else
+			$this->__returns = $returns === 1 ? null : $returns;
+
+		return $this;
+	}
+
+	/**
 	 * Get the returned value.
 	 *
 	 * @return mixed
@@ -199,29 +201,22 @@ class Compiler implements ArrayBehavior, Arrayable, IteratorAggregate
 	/**
 	 * Get the parsed attributes and return value.
 	 *
-	 * @return mixed
+	 * @return array
 	 */
 	public function response()
 	{
-		if(!$this->isCompiled())
-			return false;
-
-		$attributes = $this->getAttributes();
-		$returns = $this->returns();
-
-		if(count($attributes) === 0)
-			return $returns;
-
-		$returns = is_array($returns) && Arr::isAssoc($returns) ? $returns : ['return' => $returns];
-
-		return Arr::extend($attributes, $returns);
+		return [
+			(count($this) > 0 ? $this->getAttributes() : null),
+			$this->returns()
+		];
 	}
 
 	/**
 	 * Include and evaluate all the paths.
 	 *
 	 * @param bool $force
-	 * @return mixed
+	 *
+	 * @return static
 	 */
 	public function compile($force = false)
 	{
@@ -236,7 +231,7 @@ class Compiler implements ArrayBehavior, Arrayable, IteratorAggregate
 			$this->__isComplied = true;
 		}
 
-		return $this->response();
+		return $this;
 	}
 
 	/**
@@ -438,6 +433,16 @@ class Compiler implements ArrayBehavior, Arrayable, IteratorAggregate
 		Arr::pushUnique($this->__attributes, $key, ...$values);
 
 		return $this;
+	}
+
+	/**
+	 * To array.
+	 *
+	 * @return array
+	 */
+	public function toArray()
+	{
+		return $this->getAttributes();
 	}
 
 	/**

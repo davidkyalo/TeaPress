@@ -50,13 +50,16 @@ class Filesystem extends IlluminateFilesystem implements Contract
 	 *
 	 * @param  string  $path
 	 * @param  array  $data
-	 * @return mixed
+	 * @param  object|string|null 	$scope
 	 *
 	 * @throws \TeaPress\Filesystem\FileNotFoundException
+	 * @throws \TeaPress\Filesystem\FileNotReadableException
+	 *
+	 * @return mixed
 	 */
-	public function getRequire($path, $data = [])
+	public function getRequire($path, $data = [], $scope = NOTHING)
 	{
-		return $this->require($path, $data);
+		return $this->require($path, $data, $scope);
 	}
 
 
@@ -67,21 +70,22 @@ class Filesystem extends IlluminateFilesystem implements Contract
 	 * A scope object can be provided
 	 *
 	 * @param  string 				$file
-	 * @param  object|null|array 	$scope
 	 * @param  array 				$data
-	 * @param  mixed 				$default
+	 * @param  object|string|null 	$scope
 	 *
 	 * @throws \TeaPress\Filesystem\FileNotFoundException
+	 * @throws \TeaPress\Filesystem\FileNotReadableException
+	 *
 	 * @return mixed
 	 */
-	public function requireOnce($file, $data = [], $default = NOTHING)
+	public function requireOnce($file, $data = [], $scope = NOTHING)
 	{
-		// if(is_array($scope)){
-		// 	$default = $data;
-		// 	$data = &$scope;
-		// 	$scope = Arr::pull($data, 'this', null);
-		// }
-		return $this->requireScript($file, $data, true, $default);
+		// return $this->requireScript($file, $data, true, $scope);
+
+		if( in_array($file, get_included_files()) )
+			return true;
+
+		return $this->require($file, $data, $scope);
 	}
 
 	/**
@@ -90,47 +94,105 @@ class Filesystem extends IlluminateFilesystem implements Contract
 	 *
 	 * @param  string  $file
 	 * @param  array  $data
-	 * @param  mixed  $default
+	 * @param  object|string|null 	$scope
 	 *
 	 * @throws \TeaPress\Filesystem\FileNotFoundException
+	 * @throws \TeaPress\Filesystem\FileNotReadableException
 	 * @return mixed
 	 */
-	public function require($file, $data = [], $default = NOTHING)
+	public function require($file, $data = [], $scope = NOTHING)
 	{
-		return $this->requireScript($file, $data, false, $default);
+		// return $this->requireScript($file, $data, false, $scope);
+
+		if(!$this->isReadableFile($file)){
+			if(!$this->isFile($file))
+				throw new FileNotFoundException("File does not exist at path {$file}");
+			else
+				throw new FileNotReadableException("File '{$file}' is not readable.");
+		}
+
+		list($scope, $data) = $this->parseScriptVars($data, $scope);
+
+		$compiler = $this->createCompiler($file, $scope, $data);
+
+		list($attributes, $returns) = $compiler->compile()->response();
+
+		return is_null($returns) ? $attributes : $returns;
+
 	}
 
 	/**
 	 * Require all .php files from the given paths while exposing the provided data.
 	 * If a file does not exist or a path is broken, a FileNotFoundException exception is thrown.
 	 *
-	 * @param  string|array  $paths
-	 * @param  array  $data
-	 * @param  bool  $once
+	 * @param  string|array  		$paths
+	 * @param  array  				$data
+	 * @param  object|string|null 	$scope
 	 *
 	 * @throws \TeaPress\Filesystem\FileNotFoundException
+	 * @throws \TeaPress\Filesystem\FileNotReadableException
 	 *
 	 * @return array
 	 */
-	public function requireAll($paths, $data = [], $once = false)
+	public function requireAll($paths, $data = [], $scope = NOTHING)
 	{
-		return $this->requireScriptsFromPaths($paths, $data, $once);
+		// return $this->requireScriptsFromPaths($paths, $data, $once);
+
+		$response = [];
+
+		foreach ((array) $paths as $pk => $path) {
+
+			$files = $this->isDirectory($path) ? $this->files($path, true, ['*.php', '*.html']) : [$path];
+
+			foreach ($files as $file) {
+
+				$key = $this->parsePathToKey( $file, ($file === $path ? dirname($path) : $path ) );
+
+				Arr::set($response[$pk], $key, $this->require($file, $data, $scope) );
+
+			}
+		}
+
+		return is_array($paths) ? $response : Arr::first($response, null, []);
+
+
+
 	}
 
 	/**
 	 * Require all .php files once (require_once) from the given paths while exposing the provided data.
 	 * If a file does not exist or a path is broken, a FileNotFoundException exception is thrown.
 	 *
-	 * @param  string|array  $paths
-	 * @param  array  $data
+	 * @param  string|array  		$paths
+	 * @param  array  				$data
+	 * @param  object|string|null 	$scope
 	 *
 	 * @throws \TeaPress\Filesystem\FileNotFoundException
+	 * @throws \TeaPress\Filesystem\FileNotReadableException
 	 *
 	 * @return array
 	 */
-	public function requireAllOnce($paths, $data = [])
+	public function requireAllOnce($paths, $data = [], $scope = NOTHING)
 	{
-		return $this->requireScriptsFromPaths($paths, $data, true);
+		// return $this->requireScriptsFromPaths($paths, $data, true);
+
+		$response = [];
+
+		foreach ((array) $paths as $pk => $path) {
+
+			$files = $this->isDirectory($path) ? $this->files($path, true, ['*.php', '*.html']) : [$path];
+
+			foreach ($files as $file) {
+
+				$key = $this->parsePathToKey( $file, ($file === $path ? dirname($path) : $path ) );
+
+				Arr::set($response[$pk], $key, $this->requireOnce($file, $data, $scope) );
+
+			}
+		}
+
+		return is_array($paths) ? $response : Arr::first($response, null, []);
+
 	}
 
 	/**
@@ -145,8 +207,10 @@ class Filesystem extends IlluminateFilesystem implements Contract
 	 * @throws \TeaPress\Filesystem\FileNotFoundException
 	 *
 	 * @return mixed
+	 *
+	 * @deprecated Use require or requireOnce.
 	 */
-	protected function requireScript($__script, &$__data = [], $__once=false, $__default=NOTHING)
+	protected function requireScript($__script, $__data = [], $__once=false, $__default=NOTHING)
 	{
 
 		if( !$this->isFile($__script) ){
@@ -166,22 +230,67 @@ class Filesystem extends IlluminateFilesystem implements Contract
 		return $__once ? require_once($__script) : require($__script);
 	}
 
-
 	/**
-	 * Require all .php files from the given paths while exposing the provided data.
-	 * If a file does not exist or a path is broken, a FileNotFoundException exception is thrown.
+	 * Create a compiler instance.
 	 *
-	 * @param  string $___paths
-	 * @param  array  $___data
-	 * @param  bool  $___once
+	 * @param string 							$path
+	 * @param mixed 							$scope
+	 * @param array 							$vars
 	 *
 	 * @throws \TeaPress\Filesystem\FileNotFoundException
+	 * @throws \TeaPress\Filesystem\FileNotReadableException
+	 *
+	 * @return \TeaPress\Filesystem\Compiler
+	 */
+	public function compiler($path, $scope = null, array $vars = [])
+	{
+		if ($this->isReadableFile($path))
+			return $this->createCompiler($path, $scope, $vars);
+
+		if(!$this->isFile($path))
+			throw new FileNotFoundException("File does not exist at path {$path}");
+		else
+			throw new FileNotReadableException("File at path '{$path}' is not readable.");
+
+	}
+
+	/**
+	 * Create a compiler instance.
+	 *
+	 * @param string 							$path
+	 * @param mixed 							$scope
+	 * @param array 							$vars
+	 *
+	 * @return \TeaPress\Filesystem\Compiler
+	 */
+	protected function createCompiler($path, $scope = null, array $vars = [])
+	{
+		return new Compiler($this, $path, $scope, $vars);
+	}
+
+	/**
+	 * Parse script vars
+	 *
+	 * @param array 							$vars
+	 * @param mixed 							$scope
 	 *
 	 * @return array
 	 */
-	protected function getSctiptEvaluator()
+	protected function parseScriptVars($vars, $scope)
 	{
+		if($scope === NOTHING){
+			if(is_string($vars) || is_object($vars))
+				$scope = $vars;
+			elseif(is_array($vars))
+				$scope = Arr::pull($vars, 'this');
+			else
+				$scope = null;
+		}
 
+		if(!is_array($vars))
+			$var = [];
+
+		return [$scope, $vars];
 	}
 
 	/**
@@ -195,6 +304,8 @@ class Filesystem extends IlluminateFilesystem implements Contract
 	 * @throws \TeaPress\Filesystem\FileNotFoundException
 	 *
 	 * @return array
+	 *
+	 * @deprecated Use requireAll or requireAllOnce.
 	 */
 	protected function requireScriptsFromPaths($___paths, $___data = [], $___once=false)
 	{
@@ -410,6 +521,30 @@ class Filesystem extends IlluminateFilesystem implements Contract
 	}
 
 	/**
+	 * Determine if the given path is readable.
+	 *
+	 * @param  string  $path
+	 *
+	 * @return bool
+	 */
+	public function isReadable($path)
+	{
+		return is_readable($path);
+	}
+
+	/**
+	 * Determine if the given path is a readable file.
+	 *
+	 * @param  string  $path
+	 *
+	 * @return bool
+	 */
+	public function isReadableFile($path)
+	{
+		return is_readable($path) && is_file($path);
+	}
+
+	/**
 	 * Determine if the given path is writable.
 	 *
 	 * @param  string  $path
@@ -421,6 +556,17 @@ class Filesystem extends IlluminateFilesystem implements Contract
 	}
 
 	/**
+	 * Determine if the given path is a writable file.
+	 *
+	 * @param  string  $path
+	 * @return bool
+	 */
+	public function isWritableFile($path)
+	{
+		return is_writable($path) && is_file($path);
+	}
+
+	/**
 	 * Determine if the given path is a file.
 	 *
 	 * @param  string  $file
@@ -429,6 +575,17 @@ class Filesystem extends IlluminateFilesystem implements Contract
 	public function isFile($file)
 	{
 		return is_file($file);
+	}
+
+	/**
+	 * Determine if the given path is a symbolic.
+	 *
+	 * @param  string  $path
+	 * @return bool
+	 */
+	public function isLink($file)
+	{
+		return is_link($file);
 	}
 
 	/**
