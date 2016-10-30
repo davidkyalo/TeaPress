@@ -6,6 +6,7 @@ use TeaPress\Utils\Arr;
 use TeaPress\Utils\Str;
 use BadMethodCallException;
 use InvalidArgumentException;
+use TeaPress\Signals\Traits\Online;
 use TeaPress\Utils\Traits\Extendable;
 use TeaPress\Contracts\Core\Container;
 use TeaPress\Contracts\Signals\Hub as Contract;
@@ -88,6 +89,8 @@ class Hub implements Contract
 	public function __construct(Container $container)
 	{
 		$this->container = $container;
+
+		Online::setSignals($this);
 
 		$this->registerAllActionHook();
 	}

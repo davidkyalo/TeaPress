@@ -15,6 +15,6 @@ class LoadConfiguration
 	*/
 	public function bootstrap(Application $app)
 	{
-		$app->register('TeaPress\Config\ConfigKernel');
+		$app->register('TeaPress\Config\Kernel');
 	}
 }

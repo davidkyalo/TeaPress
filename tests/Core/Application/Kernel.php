@@ -4,7 +4,9 @@ namespace TeaPress\Tests\Core\Application;
 use TeaPress\Signals\Hub;
 use Teapress\Tests\Base\TestKernel;
 use TeaPress\Signals\Traits\Online;
+use TeaPress\Core\Bootstrap\Factory as AppFactory;
 use TeaPress\Tests\Core\Mocks\Application;
+
 
 class Kernel extends TestKernel
 {
@@ -16,7 +18,8 @@ class Kernel extends TestKernel
 			],
 			'app.new' => [
 				'TeaPress\Core\ApplicationNew',
-			]
+			],
+
 		];
 	}
 
@@ -31,11 +34,22 @@ class Kernel extends TestKernel
 
 	public function registerApps()
 	{
-		$this->app->singleton('app.shared', function($container, $args=[]) {
-			return $container->make('app.factory', $args);
-		});
+		$concrete =  function($container, $args=[]) {
 
-		$this->app->bind('app.new', function($container, $args=[]) {
+			$app = $container->make('app.factory', $args);
+
+			$factory = new AppFactory($app);
+			$factory->setBasePath(dirname( dirname(__DIR__) ));
+			$factory->bootstrap();
+
+			return $app;
+		};
+
+		$this->app->singleton('app.shared',$concrete);
+
+		$this->app->bind('app.new', $concrete);
+
+		$this->app->bind('app.non_bootstrapped', function($container, $args=[]) {
 			return $container->make('app.factory', $args);
 		});
 	}

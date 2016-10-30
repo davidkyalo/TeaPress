@@ -97,7 +97,7 @@ class PathsTest extends TestCase
 
 	public function testCanAddPathsForConfig()
 	{
-		$app = $this->newApp();
+		$app = $this->newApp(true);
 
 		$key = $this->methodAsPath(__METHOD__);
 
@@ -111,7 +111,7 @@ class PathsTest extends TestCase
 
 	public function testGetPathFluent()
 	{
-		$app = $this->newApp();
+		$app = $this->newApp(true);
 
 		$key = $this->methodAsPath(__METHOD__);
 
@@ -124,7 +124,7 @@ class PathsTest extends TestCase
 
 	public function testUsePathFluent()
 	{
-		$app = $this->newApp();
+		$app = $this->newApp(true);
 
 		$key = $this->methodAsPath(__METHOD__);
 
@@ -138,7 +138,7 @@ class PathsTest extends TestCase
 
 	public function testAddPathFluent()
 	{
-		$app = $this->newApp();
+		$app = $this->newApp(true);
 
 		$key = $this->methodAsPath(__METHOD__);
 
@@ -158,7 +158,7 @@ class PathsTest extends TestCase
 
 	public function testBoundPaths()
 	{
-		$app = $this->newApp();
+		$app = $this->newApp(true);
 
 		$names = ['base', 'config', 'lang', 'assets', 'storage', 'fake', 'very_fake'];
 
@@ -184,7 +184,7 @@ class PathsTest extends TestCase
 
 	public function testPathTo()
 	{
-		$app = $this->newApp();
+		$app = $this->newApp(true);
 
 		$app->setBasePath($this->getBasePath() );
 

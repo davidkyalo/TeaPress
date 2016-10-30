@@ -35,8 +35,9 @@ class TestCase extends ServiceTestCase
 		return $this->getContainer()->make('app.shared', $this->getMakeServiceParameters());
 	}
 
-	protected function newApp()
+	protected function newApp($bootstrapped = false)
 	{
-		return $this->getContainer()->make('app.new', $this->getMakeServiceParameters());
+		$key = $bootstrapped ? 'app.new' : 'app.non_bootstrapped';
+		return $this->getContainer()->make($key, $this->getMakeServiceParameters());
 	}
 }

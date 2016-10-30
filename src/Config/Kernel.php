@@ -1,10 +1,10 @@
 <?php
 namespace TeaPress\Config;
 
-use TeaPress\Core\Kernel;
 use TeaPress\Filesystem\Filesystem;
+use TeaPress\Core\Kernel as BaseKernel;
 
-class ConfigKernel extends Kernel
+class Kernel extends BaseKernel
 {
 	public function register()
 	{
@@ -28,15 +28,6 @@ class ConfigKernel extends Kernel
 			$path = $app['path.config'];
 			return new Manager($loader, $signals, $path);
 		});
-	}
-
-	public function registerAliases()
-	{
-		$this->app->alias('config', [
-			'TeaPress\Config\Manager',
-			'TeaPress\Contracts\Config\Manager',
-			'TeaPress\Contracts\Config\Repository'
-		]);
 	}
 
 }

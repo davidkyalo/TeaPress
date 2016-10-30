@@ -175,7 +175,7 @@ class Permit implements Arrayable, Jsonable, JsonSerializable {
 		$path = static::$url_base;
 
 		return $cipher && $hash
-				? site_url(join_paths($path, $hash, $cipher, '/'), $scheme)
+				? site_url(join_uris($path, $hash, $cipher, '/'), $scheme)
 				: null;
 	}
 

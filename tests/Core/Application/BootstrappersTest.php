@@ -8,7 +8,7 @@ use TeaPress\Tests\Core\Mocks\Bootstrap\CountExecutions;
 
 class BootstappersTest extends TestCase
 {
-	protected $serviceName='app.new';
+	protected $serviceName='app.non_bootstrapped';
 
 	public function testItsWorking()
 	{

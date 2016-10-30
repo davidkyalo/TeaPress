@@ -265,6 +265,10 @@ class Arr extends BaseArr
 	public static function get($array, $key, $default = null, $notation = NOTHING)
 	{
 		static::warnDepreciatedNotationArg(__METHOD__, $notation, $key);
+
+		if(empty($array))
+			return value($default);
+
 		list($key, $notation) = static::parseKey($key, $notation);
 
 		if (is_null($key))

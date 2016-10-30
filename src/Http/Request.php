@@ -4,10 +4,11 @@ namespace TeaPress\Http;
 use TeaPress\Utils\Arr;
 use TeaPress\Utils\Str;
 use TeaPress\Signals\Traits\Emitter;
-use TeaPress\Contracts\Session\Store as Session;
 use TeaPress\Contracts\Http\Request as Contract;
 use Illuminate\Http\Request as IlluminateRequest;
+use TeaPress\Contracts\Session\Store as SessionStore;
 use TeaPress\Contracts\Signals\Emitter as EmitterContract;
+use Symfony\Component\HttpFoundation\Session\SessionInterface;
 
 class Request extends IlluminateRequest implements Contract, EmitterContract {
 
@@ -235,10 +236,13 @@ class Request extends IlluminateRequest implements Contract, EmitterContract {
 		// }
 	}
 
-	public function setSession(Session $session)
+	public function setSession(SessionInterface $session)
 	{
 		$this->session = $session;
-		$this->session->shutingdown([$this, '_storeDataToSession']);
+
+		if( $this->session instanceof SessionStore ){
+			$this->session->shutingdown([$this, '_storeDataToSession']);
+		}
 	}
 
 }

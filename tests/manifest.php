@@ -3,6 +3,8 @@
 return [
 
 	'kernels' => [
+		'TeaPress\Tests\Kernels\FakerKernel',
+
 		'TeaPress\Tests\Filesystem\Kernel',
 		'TeaPress\Tests\Config\Kernel',
 		'TeaPress\Tests\Signals\Kernel',

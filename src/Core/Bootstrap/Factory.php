@@ -9,7 +9,7 @@ use TeaPress\Signals\Traits\Online;
 use TeaPress\Contracts\Core\Application as AppContract;
 use TeaPress\Core\Exception\ApplicationNotReadyException;
 
-abstract class Factory
+class Factory
 {
 	use Online;
 
@@ -63,12 +63,12 @@ abstract class Factory
 	protected $bootstrappers = [
 
 		'base' => [
-			'signals' => 'TeaPress\Core\Bootstrap\LoadSignals',
+			'init' => 'TeaPress\Core\Bootstrap\Initialize',
 		],
 
 		'eager' => [
-			'config' 		=> 'TeaPress\Core\Bootstrap\LoadConfiguration',
 			'teapress' 		=> 'TeaPress\Core\Bootstrap\LoadTeaPress',
+			'config' 		=> 'TeaPress\Core\Bootstrap\LoadConfiguration',
 		],
 
 		'lazy' => [

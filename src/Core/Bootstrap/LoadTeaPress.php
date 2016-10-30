@@ -30,5 +30,4 @@ class LoadTeaPress
 		$app->register('TeaPress\Filesystem\FilesystemKernel');
 	}
 
-
 }

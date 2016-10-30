@@ -124,13 +124,15 @@ class FileLoader implements LoaderInterface
 	{
 		$slash = DIRECTORY_SEPARATOR;
 
-		$path = trim($path, $slash);
-		$base = trim($base, $slash);
+		$path = Str::compact(trim($path, $slash));
+		$base = Str::compact(trim($base, $slash));
 
 		$key = substr($path, Str::length($base));
 
 		if( substr($key, -4) == '.php' )
 			$key = substr($key, 0, -4);
+
+		$key = str_replace('.', '-', $key);
 
 		return str_replace($slash,'.', trim($key, $slash));
 	}

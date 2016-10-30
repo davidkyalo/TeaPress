@@ -175,7 +175,7 @@ function rwrapslash($path, $slash = '/')
  *
  * @return string
  */
-function join_paths(){
+function join_paths_classic(){
 	$args = func_get_args();
 	$nargs = func_num_args();
 	$slash = $nargs === 2 && is_array($args[0]) ? $args[1] : '/';
@@ -191,7 +191,42 @@ function join_paths(){
 	return rtrimslash($first, $slash) . rtrimslash($path, $slash) . lwrapslash($last, $slash);
 }
 
+/**
+ * Safely join the given path fragments with non-repeating slashes
+ *
+ * @param strings|array	...$fragments
+ * @return string
+ */
+function join_paths(...$fragments)
+{
+	if(count($fragments) === 1 && is_array($fragments[0])){
+		$fragments = $fragments[0];
+	}
 
+	return Str::join(
+			DIRECTORY_SEPARATOR,
+			array_filter($fragments, function($fragment){
+				return $fragment !== "";
+			})
+		);
+}
+
+/**
+ * Safely join the given uri fragments with non-repeating slashes
+ *
+ * @param strings|array	...$fragments
+ * @return string
+ */
+function join_uris(...$fragments)
+{
+	if(count($fragments) === 1 && is_array($fragments[0])){
+		$fragments = $fragments[0];
+	}
+
+	return Str::join('/', array_filter($fragments, function($fragment){
+		return $fragment !== "";
+	}));
+}
 
 
 function long_rand($len) {
@@ -230,8 +265,9 @@ function is_ajax(){
 	}
 }
 
-function is_cli(){
-	return (PHP_SAPI === 'cli');
+function is_cli()
+{
+	return php_sapi_name() == 'cli';
 }
 
 

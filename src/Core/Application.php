@@ -90,6 +90,10 @@ class Application extends Container implements Contract
 	public function __construct()
 	{
 		$this->registerBaseBindings();
+
+		$this->registerCoreContainerAliases();
+
+		$this->bindDefaultPathsInContainer();
 	}
 
 
@@ -103,22 +107,24 @@ class Application extends Container implements Contract
 		static::setInstance($this);
 
 		$this->instance('app', $this);
-
-		$this->alias('app', [
-			'TeaPress\Core\Application',
-			'TeaPress\Contracts\Core\Container',
-			'TeaPress\Contracts\Core\Application',
-			'Illuminate\Contracts\Container\Container',
-		]);
-
-		$this->bindPathsInContainer(['base', 'config', 'lang', 'assets', 'storage']);
 	}
 
 
 /* Path methods */
 
 	/**
-	* Bind all of the application paths in the container.
+	* Bind the default application paths in the container.
+	*
+	* @return void
+	*/
+	protected function bindDefaultPathsInContainer()
+	{
+		$this->bindPathsInContainer(['base', 'config', 'lang', 'assets', 'storage']);
+	}
+
+
+	/**
+	* Bind application path(s) in the container.
 	*
 	* @param array|string $keys
 	*
@@ -320,7 +326,7 @@ class Application extends Container implements Contract
 	*
 	* @return bool
 	*/
-	public function runningInConsole()
+	public function isCli()
 	{
 		return php_sapi_name() == 'cli';
 	}
@@ -330,9 +336,9 @@ class Application extends Container implements Contract
 	*
 	* @return bool
 	*/
-	public function runningUnitTests()
+	public function isUnitTesting()
 	{
-		return $this->runningInConsole() && defined('DOING_UNIT_TESTS') ? (bool) DOING_UNIT_TESTS : false;
+		return $this->isCli() && defined('DOING_UNIT_TESTS') ? (bool) DOING_UNIT_TESTS : false;
 	}
 
 /********* Path methods ********/
@@ -913,6 +919,9 @@ class Application extends Container implements Contract
 	*/
 	protected function bindAppCallback($event, $callback, $priority = null)
 	{
+		if(!$this->bound('signals'))
+			return;
+
 		return $this->signals->bind($this->appEventTag($event), $callback, $priority);
 	}
 
@@ -928,6 +937,9 @@ class Application extends Container implements Contract
 	*/
 	protected function bindKernelCallback($kernel, $event, $callback, $priority = null)
 	{
+		if(!$this->bound('signals'))
+			return;
+
 		$kernel = is_string($kernel) ? $kernel : get_class($kernel);
 
 		return $this->signals->bind([$kernel, $event], $callback, $priority);
@@ -944,6 +956,9 @@ class Application extends Container implements Contract
 	*/
 	protected function fireAppCallbacks($event, ...$payload)
 	{
+		if(!$this->bound('signals'))
+			return;
+
 		if(!in_array($this, $payload))
 			$payload[] = $this;
 
@@ -961,6 +976,9 @@ class Application extends Container implements Contract
 	*/
 	protected function fireKernelCallbacks($kernel, $event, ...$payload)
 	{
+		if(!$this->bound('signals'))
+			return;
+
 		$kernel = is_string($kernel) ? $kernel : get_class($kernel);
 
 		if(!in_array($this, $payload)){
@@ -1230,4 +1248,41 @@ class Application extends Container implements Contract
 
 		throw new BadMethodCallException("Call to undefined method '{$method}' not in application.");
 	}
+
+
+	/**
+	 * Register the core class aliases in the container.
+	 *
+	 * @return void
+	 */
+	protected function registerCoreContainerAliases()
+	{
+		$aliases = [
+			'app' => [
+				'TeaPress\Core\Application',
+				'TeaPress\Contracts\Core\Container',
+				'TeaPress\Contracts\Core\Application',
+				'Illuminate\Contracts\Container\Container',
+			],
+			'signals' => [
+				'events',
+				'TeaPress\Signals\Hub',
+				'TeaPress\Contracts\Signals\Hub',
+				'Illuminate\Contracts\Events\Dispatcher'
+			],
+			'config' => [
+				'TeaPress\Config\Manager',
+				'TeaPress\Contracts\Config\Manager'
+			],
+			'request' => [
+				'TeaPress\Http\Request',
+				'TeaPress\Contracts\Http\Request'
+			],
+		];
+
+		foreach ($aliases as $abstract => $alias) {
+			$this->alias($abstract, $alias);
+		}
+	}
+
 }

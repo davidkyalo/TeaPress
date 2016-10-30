@@ -16,9 +16,14 @@
 		"illuminate/session" : "5.1.*",
 		"illuminate/validation" : "5.1.*",
 		"illuminate/filesystem": "5.1.*",
+		"illuminate/support": "5.1.*",
 		"illuminate/http"	: "5.1.*",
+		"illuminate/view"	: "5.1.*",
 		"symfony/translation": "2.7.*",
-		"symfony/finder": "2.7.*"
+		"symfony/finder": "2.7.*",
+		"nikic/fast-route": "^1.0",
+		"vlucas/phpdotenv": "^2.4",
+		"jeremeamia/superclosure": "^2.2"
 	},
 	"require-dev": {
 		"fzaninotto/faker": "^1.5",
