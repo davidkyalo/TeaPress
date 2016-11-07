@@ -13,8 +13,7 @@ use InvalidArgumentException;
 use UnexpectedValueException;
 use TeaPress\Contracts\Http\Request;
 use TeaPress\Routing\Matching\Matchable;
-use TeaPress\Contracts\Routing\Registrar;
-use TeaPress\Contracts\Routing\Actionable;
+use TeaPress\Contracts\Utils\Actionable;
 use TeaPress\Contracts\Routing\Route as Contract;
 use Illuminate\Http\Exception\HttpResponseException;
 use TeaPress\Contracts\Core\Container as ContainerContract;
@@ -23,11 +22,6 @@ use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 class Route implements Contract, Matchable
 {
 	use RouteDependencyResolverTrait;
-
-	/**
-	 * @var \TeaPress\Contracts\Core\Container
-	 */
-	protected $container;
 
 	/**
 	 * @var \TeaPress\Routing\UriParserInterface
@@ -657,19 +651,6 @@ class Route implements Contract, Matchable
 	}
 
 	/**
-	 * Set the IOC container instance.
-	 *
-	 * @param \TeaPress\Contracts\Core\Container $container
-	 * @return static
-	 */
-	public function setContainer(ContainerContract $container)
-	{
-		$this->container = $container;
-
-		return $this;
-	}
-
-	/**
 	 * Set the uri parser instance.
 	 *
 	 * @param \TeaPress\Routing\UriParserInterface $parser
@@ -734,7 +715,8 @@ class Route implements Contract, Matchable
 	 */
 	protected function handlerReferencesController($handler)
 	{
-		return Router::handlerReferencesController($handler);
+		// return Router::handlerReferencesController($handler);
+		return $this->isCallableClassMethod($handler, false);
 	}
 
 

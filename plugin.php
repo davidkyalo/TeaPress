@@ -10,8 +10,3 @@
 */
 
 require_once __DIR__.'/vendor/autoload.php';
-
-function custom_rewrite_basic() {
-  add_rewrite_rule('^leaf/?', 'index.php?page_id=12', 'top');
-}
-add_action('init', 'custom_rewrite_basic');

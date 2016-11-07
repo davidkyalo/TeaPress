@@ -1,16 +1,14 @@
 <?php
-namespace TeaPress\Contracts\Routing;
-
-use TeaPress\Contracts\Http\Request;
+namespace TeaPress\Contracts\Utils;
 
 interface Actionable
 {
 	/**
 	 * Executed before the requested action is called.
 	 *
-	 * @param  \TeaPress\Contracts\Http\Request $request
-	 * @param  string 							$method
-	 * @param  array 							$parameters
+	 * @param  mixed 	$request
+	 * @param  string 	$action
+	 * @param  array 	$parameters
 	 * @return array
 	 */
 	public function beforeAction($request, $action, $parameters = []);
@@ -18,10 +16,10 @@ interface Actionable
 	/**
 	 * Executed after the requested action is called.
 	 *
-	 * @param  mixed 							$response
-	 * @param  \TeaPress\Contracts\Http\Request $request
-	 * @param  string 							$method
-	 * @param  array 							$parameters
+	 * @param  mixed 	$response
+	 * @param  mixed 	$request
+	 * @param  string 	$action
+	 * @param  array 	$parameters
 	 * @return mixed
 	 */
 	public function afterAction($response, $request, $action, $parameters = []);
@@ -29,9 +27,9 @@ interface Actionable
 	/**
 	 * Executed if the requested action is missing.
 	 *
-	 * @param  \TeaPress\Contracts\Http\Request $request
-	 * @param  string 							$method
-	 * @param  array 							$parameters
+	 * @param  mixed 		$request
+	 * @param  string 		$action
+	 * @param  array 		$parameters
 	 * @return array|null
 	 */
 	public function missingAction($request, $action, $parameters = []);
