@@ -41,6 +41,10 @@
 			<file>./tests/Utils/StrTest.php</file>
 		</testsuite>
 
+		<testsuite name="routing">
+			<directory>./tests/Routing/</directory>
+		</testsuite>
+
 		<testsuite name="core">
 			<directory>./tests/Core/</directory>
 		</testsuite>

@@ -14,6 +14,8 @@ class Request extends IlluminateRequest implements Contract, EmitterContract {
 
 	use Emitter;
 
+	protected $homePath;
+
 	public function reload($query = true, $status = 302){
 		if($query === true){
 			$url = $this->fullUrl();
@@ -58,20 +60,6 @@ class Request extends IlluminateRequest implements Contract, EmitterContract {
 		return trimslashes($this->getScriptName()) === 'wp-cron.php' ? true : false;
 	}
 
-	public function url( $unslash = false ){
-		$url = preg_replace('/\?.*/', '', $this->getUri());
-		return $unslash ? rtrim( $url, '/') : $url;
-	}
-
-	public function uri( $unslash = false ){
-		$query = $this->getQueryString();
-		return $query ? $this->path($unslash) . '?' . $query : $this->path($unslash);
-	}
-
-	public function path($unslash = false){
-		return $unslash ? parent::path() : $this->getPathInfo();
-	}
-
 	public function is()
 	{
 		foreach (func_get_args() as $pattern) {
@@ -101,17 +89,31 @@ class Request extends IlluminateRequest implements Contract, EmitterContract {
 		return Arr::get($segments, $index, $default);
 	}
 
-
-	public function isMethod($method)
+	/**
+	 * Determine if the current request HTTP verb is any of the given methods.
+	 *
+	 * @param  string  ...$methods
+	 * @return bool
+	 */
+	public function isAnyMethod(...$methods)
 	{
-		if(is_array($method)){
-			foreach ($method as $name) {
-				if( $this->isMethod($name) )
-					return true;
-			}
-			return false;
+		foreach ($methods as $method) {
+			if( $this->isMethod($method) )
+				return true;
 		}
-		return parent::isMethod($method);
+
+		return false;
+	}
+
+	/**
+	 * Get the full path relative to the home path
+	 *
+	 * @return string
+	 */
+	public function fullPath()
+	{
+		$path = trim( preg_replace('/\?.*/', '', $this->getRequestUri()), '/');
+		return $this->homePath ? trim(Str::lstrip($path, $this->homePath),'/') : $path;
 	}
 
 	public function setQueryVar($key, $value, $update_globals = false)
@@ -243,6 +245,22 @@ class Request extends IlluminateRequest implements Contract, EmitterContract {
 		if( $this->session instanceof SessionStore ){
 			$this->session->shutingdown([$this, '_storeDataToSession']);
 		}
+	}
+
+
+	/**
+	 * Set the site's home path if not running from the doc root.
+	 *
+	 * @param  string $path
+	 * @return static
+	 */
+	public function setHomePath($path)
+	{
+		// $path = trim( parse_url($path, PHP_URL_PATH), '/');
+
+		$this->homePath = trim( parse_url($path, PHP_URL_PATH), '/');
+
+		return $this;
 	}
 
 }

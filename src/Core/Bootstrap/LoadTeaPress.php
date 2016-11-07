@@ -17,6 +17,7 @@ class LoadTeaPress
 	{
 		$this->bindAliasLoader($app);
 		$this->registerTheFilesystem($app);
+		$this->setRequestHomePath($app);
 	}
 
 	protected function bindAliasLoader($app)
@@ -30,4 +31,8 @@ class LoadTeaPress
 		$app->register('TeaPress\Filesystem\FilesystemKernel');
 	}
 
+	protected function setRequestHomePath($app)
+	{
+		$app->make('request')->setHomePath( $app->baseUrl() );
+	}
 }

@@ -59,7 +59,7 @@ if(!function_exists('pprint')){
 		$out .= "{$k}{$pad} ";
 		if($v !== NOTHING){
 			$out .= ": ";
-			$out .= var_export($v, true);
+			$out .= is_scalar($v) ? var_export($v, true) : print_r($v, true);
 			// var_dump($v);
 		}
 		$out .= "\n";

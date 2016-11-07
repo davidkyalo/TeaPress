@@ -2,17 +2,22 @@
 namespace TeaPress\Routing;
 
 use Closure;
+use TeaPress\Utils\Str;
 use TeaPress\Utils\Arr;
 use InvalidArgumentException;
+use Illuminate\Http\Response;
+use Illuminate\Pipeline\Pipeline;
 use TeaPress\Contracts\Http\Request;
 use TeaPress\Contracts\Core\Container;
-use Symfony\Component\HttpFoundation\Response;
+use TeaPress\Routing\Error\RoutingError;
 use TeaPress\Contracts\Signals\Hub as Signals;
+use TeaPress\Contracts\Routing\Router as Contract;
+use Psr\Http\Message\ResponseInterface as PsrResponseInterface;
+use Symfony\Bridge\PsrHttpMessage\Factory\HttpFoundationFactory;
+use Symfony\Component\HttpFoundation\Response as SymfonyResponse;
+use TeaPress\Contracts\Routing\RouteCollector as RouteCollectorContract;
 
-// use TeaPress\Http\Response\Factory as ResponseFactory;
-// use TeaPress\Exceptions\HttpErrorException;
-
-class Router
+class Router implements Contract
 {
 
 	/**
@@ -23,11 +28,18 @@ class Router
 	public static $verbs = ['HEAD', 'GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'];
 
 	/**
+	 * The route collector instance.
+	 *
+	 * @var \TeaPress\Contracts\Routing\RouteCollector
+	 */
+	protected $routes;
+
+	/**
 	 * The IOC container instance.
 	 *
 	 * @var \TeaPress\Contracts\Core\Container
 	 */
-	protected $app;
+	protected $container;
 
 	/**
 	 * The signals hub instance.
@@ -37,11 +49,18 @@ class Router
 	protected $signals;
 
 	/**
+	 * The UriParser instance.
+	 *
+	 * @var \TeaPress\Routing\UriParserInterface
+	 */
+	protected $parser;
+
+	/**
 	 * The request currently being dispatched.
 	 *
 	 * @var \TeaPress\Contracts\Http\Request
 	 */
-	protected $request;
+	protected $currentRequest;
 
 	/**
 	 * The currently dispatched route instance.
@@ -51,18 +70,18 @@ class Router
 	protected $current;
 
 	/**
-	 * All registered routes.
+	 * Registered routes grouped by http method.
 	 *
 	 * @var array
 	 */
-	protected $routes = [];
+	protected $routesByMethod = [];
 
 	/**
-	 * All the named routes.
+	 * Middleware names.
 	 *
 	 * @var array
 	 */
-	protected $namedRoutes = [];
+	protected $middlewareNames = [];
 
 	/**
 	 * Middleware for all routes.
@@ -70,6 +89,13 @@ class Router
 	 * @var array
 	 */
 	protected $middleware = [];
+
+	/**
+	 * Where clauses for all routes.
+	 *
+	 * @var array
+	 */
+	protected $patterns = [];
 
 	/**
 	 * All the named routes.
@@ -81,12 +107,16 @@ class Router
 	/**
 	 * Adds the action hooks for WordPress.
 	 *
-	 * @param \TeaPress\Contracts\Core\Container 	$app
-	 * @param \TeaPress\Contracts\Signals\Hub 		$signals
+	 * @param \TeaPress\Contracts\Routing\RouteCollector 	$routes
+	 * @param \TeaPress\Routing\UriParserInterface 			$parser
+	 * @param \TeaPress\Contracts\Core\Container 			$container
+	 * @param \TeaPress\Contracts\Signals\Hub 				$signals
 	 */
-	public function __construct(Container $app, Signals $signals)
+	public function __construct(RouteCollectorContract $routes, UriParserInterface $parser, Container $container, Signals $signals)
 	{
-		$this->app = $app;
+		$this->routes = $routes;
+		$this->parser = $parser;
+		$this->container = $container;
 		$this->signals = $signals;
 	}
 
@@ -212,13 +242,17 @@ class Router
 
 	/**
 	 * Create a group of routes with shared attributes.
+	 * If attributes is a string, it will be used as the group's uri prefix.
 	 *
-	 * @param  array     $attributes
+	 * @param  array|string     $attributes
 	 * @param  callable  $callback
 	 * @return void
 	 */
-	public function group(array $attributes, callable $callback)
+	public function group($attributes, callable $callback)
 	{
+		if(is_string($attributes))
+			$attributes = ['prefix' => $attributes];
+
 		$this->updateGroupStack($attributes);
 
 		// Once we have updated the group stack, we will execute the user Closure and
@@ -231,18 +265,73 @@ class Router
 
 /** End **/
 
+	/**
+	 * Add global middleware for all routes.
+	 *
+	 * @param  array|string(s)  ...$middleware
+	 * @return static
+	 */
+	public function middleware(...$middleware)
+	{
+		if(count($middleware) === 1 && is_array($middleware[0]))
+			$middleware = $middleware[0];
+
+		$this->middleware = $this->mergeMiddleware($this->middleware, $middleware);
+
+		return $this;
+	}
 
 	/**
-	 * Dispatch the current request to it's matching route.
+	 * Register a middleware class with a name.
 	 *
-	 * @param \TeaPress\Contracts\Http\Request $request
-	 *
-	 * @return \TeaPress\Http\Response
+	 * @param  string|array  $class
+	 * @param  string  $name
+	 * @return $thid
 	 */
-	public function dispatch(Request $request)
+	public function registerMiddleware($class, $name = null)
 	{
-		return $this->addRoute(static::$verbs, $uri, $handler);
+		if(is_array($class)){
+			foreach ($class as $name => $cls) {
+				$name = is_string($name) ? $name : null;
+				$this->registerMiddleware($cls, $name);
+			}
+		}
+		else{
+			$this->middlewareNames[($name ?: $class)] = $class;
+		}
+
+		return $this;
 	}
+
+	/**
+	 * Set a global regex pattern on all routes.
+	 *
+	 * @param  string  $key
+	 * @param  string  $pattern
+	 * @return static
+	 */
+	public function pattern($key, $pattern)
+	{
+		$this->patterns[$key] = $pattern;
+
+		return $this;
+	}
+
+	/**
+	 * Set a group of global regex patterns on all routes.
+	 *
+	 * @param  array  $patterns
+	 * @return static
+	 */
+	public function patterns(array $patterns)
+	{
+		foreach ($patterns as $key => $pattern) {
+			$this->pattern($key, $pattern);
+		}
+
+		return $this;
+	}
+
 
 	/**
 	 * Register a new route.
@@ -257,11 +346,7 @@ class Router
 	{
 		$route = $this->createRoute($methods, $uri, $handler);
 
-		foreach ($route->getMethods() as $method) {
-			$this->routes[$method][$route->getUri()] = $route;
-		}
-
-		$this->routes[$method.$route->getUri()] = $route;
+		$this->routes->add($route);
 
 		return $route;
 	}
@@ -278,23 +363,29 @@ class Router
 	protected function createRoute($methods, $uri, $handler = null)
 	{
 		$route = $this->newRoute(
-			array_map('strtoupper', (array) $methods),
+			$this->parseHttpMethods($methods),
 			$this->prefixRouteUri($uri),
 			$this->getGroupName(),
 			$this->getGroupNamespace()
 		);
 
+		list($handler, $name) = $this->extractHandlerName($handler);
+
 		if($handler)
 			$route->handler($handler);
-		elseif ($handler = $this->getGroupHandler()) {
+		elseif ($handler = $this->getGroupHandler())
 			$route->handler($handler, false);
-		}
 
-		return $route;
+		if($middleware = $this->getGroupMiddleware())
+			$route->middleware($middleware);
+
+		$route->where($this->getInheritedWhereClauses());
+
+		return $name ? $route->name($name) : $route;
 	}
 
 	/**
-	 * Create a route instance.
+	 * Create a Route object.
 	 *
 	 * @param  array					$methods
 	 * @param  string 					$uri
@@ -305,118 +396,55 @@ class Router
 	 */
 	protected function newRoute($methods, $uri, $prefix = null, $namespace = null)
 	{
-		$route = new Route($this, $methods, $uri, $prefix, $namespace);
-		$route->setContainer($this->app);
-		return $route;
+		return (new Route($methods, $uri, $prefix, $namespace))
+					->setContainer($this->container)
+					->setParser($this->parser);
 	}
 
 	/**
-	* Parse a route's action parameter.
-	*
-	* @param  mixed   $action
-	* @return array
-	*/
-	protected function parseRouteAction($action)
-	{
-		//
-	}
-
-	/**
-	 * Add a controller based route action to the action array.
+	 * Parse the given HTTP verbs to uppercase.
 	 *
-	 * @param  array|string  $action
+	 * @param array|string $methods
 	 * @return array
 	 */
-	protected function convertToControllerAction($action)
+	protected function parseHttpMethods($methods)
 	{
-		if (is_string($action))
-			$action = ['uses' => $action];
-
-
-		// Here we'll merge any group "uses" statement if necessary so that the action
-		// has the proper clause for this property. Then we can simply set the name
-		// of the controller on the action and return the action array for usage.
-		if ($this->hasGroupStack()) {
-			$action['uses'] = $this->prependGroupUses($action['uses']);
-		}
-
-		// Here we will set this controller name on the action array just so we always
-		// have a copy of it for reference if we need it. This can be used while we
-		// search for a controller name or do some other type of fetch operation.
-		$action['controller'] = $action['uses'];
-
-		return $action;
+		return array_map('strtoupper', (array) $methods);
 	}
 
 	/**
-	 * Prepend the last group uses onto the use clause.
+	 * Extract a route's name from it's handler argument.
 	 *
-	 * @param  string  $uses
-	 * @return string
+	 * @param  mixed $hander
+	 * @return array
 	 */
-	protected function prependGroupUses($uses)
+	protected function extractHandlerName($handler)
 	{
-		$group = end($this->groupStack);
-		return isset($group['namespace']) && strpos($uses, '\\') !== 0 ? $group['namespace'].'\\'.$uses : $uses;
+		if(!is_array($handler) || is_callable($handler, true))
+			return [$handler, null];
+
+		$name = isset($handler['as']) ? $handler['as'] : null;
+
+		if(isset($handler['to']))
+			return [$handler['to'], $name];
+
+		elseif(isset($handler['handler']))
+			return [$handler['handler'], $name];
+
+		unset($handler['as']);
+
+		return [ array_pop($handler), $name ];
 	}
 
-	/**
-	 * Add the given route to the arrays of routes.
-	 *
-	 * @param  \TeaPress\Routing\Route  $route
-	 * @return void
-	 */
-	protected function addToCollections($route, $add_to_lookups = true)
-	{
-
-		$this->routes[] = $route;
-
-		// foreach ($route->getMethods() as $method) {
-		// 	$this->routes[$method][$route->getUri()] = $route;
-		// }
-
-		if($add_to_lookups)
-			$this->addLookups($route);
-	}
 
 	/**
-	 * Add the route to any look-up tables if necessary.
+	 * Get where clauses a route should inherit from the current global and group clauses.
 	 *
-	 * @param  \TeaPress\Routing\Route  $route
-	 * @return void
+	 * @return array
 	 */
-	protected function addLookups($route)
+	protected function getInheritedWhereClauses()
 	{
-		// If the route has a name, we will add it to the name look-up table so that we
-		// will quickly be able to find any route associate with a name and not have
-		// to iterate through every route every time we need to perform a look-up.
-		if ($name = $route->getName())
-			$this->nameList[$name] = $route;
-
-
-		// When the route is routing to a controller we will also store the action that
-		// is used by the route. This will let us reverse route to controllers while
-		// processing a request and easily generate URLs to the given controllers.
-		if ($action = $route->getController())
-			$this->actionList[$action] = $route;
-	}
-
-	/**
-	 * Refresh the name look-up table.
-	 *
-	 * This is done in case any names are fluently defined.
-	 *
-	 * @return void
-	 */
-	public function refreshNameLookups()
-	{
-		$this->nameList = [];
-
-		foreach ($this->allRoutes as $route) {
-			if ($route->getName()) {
-				$this->nameList[$route->getName()] = $route;
-			}
-		}
+		return array_merge($this->patterns, $this->getGroupWhereClauses());
 	}
 
 	/**
@@ -427,11 +455,7 @@ class Router
 	 */
 	protected function updateGroupStack(array $attributes)
 	{
-		if (! empty($this->groupStack)) {
-			$attributes = $this->mergeGroup($attributes, end($this->groupStack));
-		}
-
-		$this->groupStack[] = $attributes;
+		$this->groupStack[] = $this->mergeGroup($attributes, $this->currentGroup());
 	}
 
 	/**
@@ -443,49 +467,44 @@ class Router
 	 */
 	public static function mergeGroup($new, $old)
 	{
-		$new['namespace'] = static::formatUsesPrefix($new, $old);
+		$new['handler'] = static::findGroupHandler($new, $old);
+
+		unset($new['to']);
+
+		$new['middleware'] = static::formatGroupMiddleware($new, $old);
+
+		$new['where'] = static::formatGroupWheres($new, $old);
+
+		if(empty($old))
+			return $new;
+
+		$new['namespace'] = static::formatGroupNamespace($new, $old);
 
 		$new['prefix'] = static::formatGroupPrefix($new, $old);
 
-		if (isset($old['as']))
-			$new['as'] = $old['as'].(isset($new['as']) ? $new['as'] : '');
+		$new['as'] = static::formatGroupName($new, $old);
 
-		if(isset($new['before']))
-			$new['before'] = (array) $new['before'];
+		$old = Arr::except($old, ['namespace', 'prefix', 'as', 'handler', 'where', 'middleware']);
 
-		if(isset($new['after']))
-			$new['after'] = (array) $new['after'];
-
-		if( isset($old['before']) )
-			$new['before'] = isset($new['before'])
-					? array_unique( array_merge($old['before'], $new['before']))
-					: $old['before'];
-
-		if( isset($old['after']) )
-			$new['after'] = isset($new['after'])
-					? array_unique( array_merge($old['after'], $new['after']))
-					: $old['after'];
-
-
-		return array_merge_recursive(Arr::except($old, ['namespace', 'prefix', 'as', 'after', 'before']), $new);
+		return array_merge_recursive($old, $new);
 	}
 
 	/**
-	 * Format the uses prefix for the new group attributes.
+	 * Format the namespace for the new group attributes.
 	 *
 	 * @param  array  $new
 	 * @param  array  $old
 	 * @return string|null
 	 */
-	public static function formatUsesPrefix($new, $old)
+	public static function formatGroupNamespace($new, $old)
 	{
-		if (isset($new['namespace'])) {
-			return isset($old['namespace'])
-					? join_paths([$old['namespace'], $new['namespace']], '\\')
-					: $new['namespace'];
-		}
+		$newSpace = isset($new['namespace']) ? $new['namespace'] : '';
+		$oldSpace = isset($old['namespace']) ? $old['namespace'] : '';
 
-		return isset($old['namespace']) ? $old['namespace'] : null;
+		if($newSpace)
+			return $oldSpace ? trim($oldSpace, '\\').'\\'.trim($newSpace, '\\') : trim($newSpace, '\\');
+		else
+			return $oldSpace;
 	}
 
 	/**
@@ -497,8 +516,151 @@ class Router
 	 */
 	public static function formatGroupPrefix($new, $old)
 	{
-		return join_paths(Arr::get($old, 'prefix', ''), Arr::get($new, 'prefix', ''));
+		$newPrefix = isset($new['prefix']) ? $new['prefix'] : '';
+		$oldPrefix = isset($old['prefix']) ? $old['prefix'] : '';
+
+		return join_uris($oldPrefix, $newPrefix);
 	}
+
+	/**
+	 * Format the name for the new group attributes.
+	 *
+	 * @param  array  $new
+	 * @param  array  $old
+	 * @return string|null
+	 */
+	public static function formatGroupName($new, $old)
+	{
+		$newName = isset($new['as']) ? $new['as'] : '';
+		$oldName = isset($old['as']) ? $old['as'] : '';
+
+		if($newName)
+			return $oldName ? trim($oldName, '.').'.'.trim($newName, '.') : trim($newName, '.');
+		else
+			return $oldName;
+	}
+
+	/**
+	 * Format the handler for the new group attributes.
+	 *
+	 * @param  array  $new
+	 * @param  array  $old
+	 * @return string|null
+	 */
+	public static function findGroupHandler($new, $old)
+	{
+		if(isset($new['to']))
+			return $new['to'];
+		elseif(isset($new['handler']))
+			return $new['handler'];
+		else
+			return isset($old['handler'])
+					? $old['handler']
+					: null; //(isset($old['to']) ? $old['to'] : null);
+	}
+
+	/**
+	 * Format the where clauses for the new group attributes.
+	 *
+	 * @param  array  $new
+	 * @param  array  $old
+	 * @return array
+	 */
+	public static function formatGroupWheres($new, $old)
+	{
+		$newClauses = isset($new['where']) ? $new['where'] : [];
+		$oldClauses = isset($old['where']) ? $old['where'] : [];
+
+		return array_merge($oldClauses, $newClauses);
+	}
+
+	/**
+	 * Format the middlewares for the new group attributes.
+	 *
+	 * @param  array  $new
+	 * @param  array  $old
+	 * @return array
+	 */
+	public static function formatGroupMiddleware($new, $old)
+	{
+		$newWares = isset($new['middleware']) ? $new['middleware'] : [];
+		$oldWares = isset($old['middleware']) ? $old['middleware'] : [];
+
+		return static::mergeMiddleware( $oldWares, $newWares );
+	}
+
+	/**
+	 * Format the middlewares for the new group attributes.
+	 *
+	 * @param  array  $old
+	 * @param  array  $new
+	 * @return array
+	 */
+	public static function mergeMiddleware($old, $new)
+	{
+		$merged = array_merge(static::explodeMiddleware($old, false), static::explodeMiddleware($new));
+
+		return array_unique( $merged );
+	}
+
+	/**
+	 * Parse the given middleware into an array.
+	 *
+	 * @param  string|array  $middleware
+	 * @return array
+	 */
+	public static function explodeMiddleware($middleware, $explodeArray = true)
+	{
+		if(is_array($middleware)){
+			return $explodeArray ? static::explodeArrayMiddleware($middleware) : $middleware;
+		}
+
+		return Arr::build(explode('|', $middleware), function($key, $value){
+			$value = trim($value);
+			return $value ? [$key, $value] : null;
+		});
+
+	}
+
+	/**
+	 * Parse the given middleware into an array.
+	 *
+	 * @param  array  $middlewares
+	 * @return array
+	 */
+	public static function explodeArrayMiddleware(array $middlewares)
+	{
+		$results = [];
+
+		foreach ($middlewares as $middleware) {
+			$results = array_merge($results, static::explodeMiddleware($middleware, false));
+		}
+
+		return $results;
+	}
+
+	/**
+	 * Determine if the given hander is a controller.
+	 *
+	 * @param  mixed  $handler
+	 * @return bool
+	 */
+	public static function handlerReferencesController($handler)
+	{
+		return is_string($handler) && !is_callable($handler);
+	}
+
+	/**
+	 * Determine if the given object is a RoutingError instance.
+	 *
+	 * @param  mixed  $object
+	 * @return bool
+	 */
+	public static function isRoutingError($object)
+	{
+		return ($object instanceof RoutingError);
+	}
+
 
 	/**
 	 * Determine if the router currently has a group stack.
@@ -574,7 +736,7 @@ class Router
 	/**
 	 * Get the route group handler.
 	 *
-	 * @return string
+	 * @return null|mixed
 	 */
 	protected function getGroupHandler()
 	{
@@ -582,49 +744,512 @@ class Router
 	}
 
 	/**
-	 * Get the URL to a route.
-	 *
-	 * @param  string $name
-	 * @param  array  $parameters
-	 * @return string
-	 */
-	public function url($name, $parameters = [])
-	{
-		$route = null;
-		$routes = $this->routes['named'];
-		foreach (self::$methods as $method)
-		{
-			if ( ! isset($routes[$method . '::' . $name]))
-			{
-				continue;
-			}
-
-			$route = $routes[$method . '::' . $name];
-		}
-
-		if ($route === null)
-		{
-			return null;
-		}
-
-		$matches = [];
-		preg_match_all($this->parameterPattern, $uri = $route['uri'], $matches);
-		foreach ($matches[0] as $id => $match)
-		{
-			$uri = preg_replace('/' . preg_quote($match) . '/', array_get($args, $matches[1][$id], $match), $uri, 1);
-		}
-
-		return home_url() . '/' . $uri;
-	}
-
-	/**
-	 * Get all registered routes
+	 * Get the route group's where clauses.
 	 *
 	 * @return array
 	 */
-	public function getRoutes()
+	protected function getGroupWhereClauses()
 	{
-		return Arr::get($this->routes, strtoupper($method), []);
+		return Arr::get($this->currentGroup(), 'where', []);
 	}
 
+	/**
+	 * Get the route group middleware.
+	 *
+	 * @return array
+	 */
+	protected function getGroupMiddleware()
+	{
+		return Arr::get($this->currentGroup(), 'middleware', []);
+	}
+
+	/**
+	 * Get the routable URI from the given request.
+	 * If request is not provided, the current request (if set) is used.
+	 *
+	 * @param  \TeaPress\Contracts\Http\Request|null $request
+	 * @return string|null
+	 */
+	public function requestUri(Request $request = null)
+	{
+		$request = $request ?: $this->currentRequest;
+		return $request
+				? rawurldecode(Str::begin($request->fullPath(), '/'))
+				: null;
+	}
+
+	/**
+	 * Get the current request.
+	 *
+	 * @return \TeaPress\Contracts\Http\Request
+	 */
+	public function currentRequest()
+	{
+		return $this->currentRequest;
+	}
+
+	/**
+	 * Get registered routes.
+	 * If method is false (default), returns a single array with all routes.
+	 * If true (bool) is given, returns a multidimensional array of routes grouped by HTTP method.
+	 * If a string is given, returns an array of routes for that HTTP method.
+	 *
+	 * @param string|bool|null $method
+	 * @return array
+	 */
+	public function getRoutes($method = false)
+	{
+		if($method === false)
+			return $this->routes->getRoutes();
+		else
+			return $this->routes->get( ($method === true ? null : $method) );
+	}
+
+
+	/**
+	 * Dispatch the request to the application.
+	 *
+	 * @param \TeaPress\Contracts\Http\Request  $request
+	 * @return \Illuminate\Http\Response
+	 */
+	public function dispatch(Request $request)
+	{
+		$this->currentRequest = $request;
+
+		$uri = $this->requestUri($request);
+
+		$response = $this->fireEvent("dispatching {$uri}", [$request], true);
+
+		if (is_null($response)){
+			$response = $this->dispatchToRoute($request);
+		}
+
+		$response = $this->isRoutingError($response)
+					? $response : $this->prepareResponse($response, $request);
+
+		$this->fireEvent("dispatched {$uri}", [$request, $response]);
+
+		return $response;
+	}
+
+	/**
+	 * Dispatch the current request to it's matching route and return the response.
+	 *
+	 * @return mixed
+	 */
+	protected function dispatchToRoute(Request $request)
+	{
+		$uri = $this->requestUri($request);
+
+		$route = $this->setCurrentRoute(
+						$this->findRoute($request->getMethod(), $uri)
+					);
+
+		if( $this->isRoutingError($route) ){
+			return $route;
+		}
+
+		$response = $this->callRouteBefore($route, $request);
+
+		if( is_null($response) ){
+			$response = $this->runRouteWithinStack($route, $request);
+		}
+
+		$response = $this->getResponse($response);
+
+		$this->callRouteAfter($route, $request, $response);
+
+		return $response;
+	}
+
+	/**
+	 * Find the route matching a given request.
+	 *
+	 * @param  string  $httpVerb
+	 * @param  string  $uri
+	 * @return \TeaPress\Routing\Route|\TeaPress\Routing\Error\RoutingError
+	 */
+	protected function findRoute($httpVerb, $uri)
+	{
+		return $this->routes->match($httpVerb, $uri);
+	}
+
+	/**
+	 * Sets the current route and binds it to the container and current request.
+	 *
+	 * @param  \TeaPress\Routing\Route|\TeaPress\Routing\Error\RoutingError $route
+	 * @return \TeaPress\Routing\Route|\TeaPress\Routing\Error\RoutingError
+	 */
+	protected function setCurrentRoute($route)
+	{
+		$this->current = $route;
+
+		$this->currentRequest->setRouteResolver(function() use ($route)
+		{
+			return $route;
+		});
+
+		$this->container->instance('TeaPress\Routing\Route', $route);
+
+		return $route instanceof Route ? $route->setContainer($this->container) : $route;
+	}
+
+	/**
+	 * Run the given route within a Stack "onion" instance.
+	 *
+	 * @param  \TeaPress\Routing\Route  $route
+	 * @param  \TeaPress\Http\Request  $request
+	 * @return mixed
+	 */
+	protected function runRouteWithinStack(Route $route, Request $request)
+	{
+		$middleware = $this->gatherRouteMiddlewares($route, $request);
+
+		if(empty($middleware))
+			$response = $route->run($request);
+		else
+			$response = (new Pipeline($this->container))
+							->send($request)
+							->through($middleware)
+							->then(function ($request) use ($route) {
+								return $route->run($request);
+							});
+
+		return $this->getResponse($response);
+	}
+
+
+	/**
+	 * Gather the middleware for the given route.
+	 *
+	 * @param  \TeaPress\Routing\Route  $route
+	 * @param  \TeaPress\Http\Request  $request
+	 * @return array
+	 */
+	public function gatherRouteMiddlewares(Route $route, Request $request = null)
+	{
+		$names = array_merge($this->middleware, $route->getMiddleware());
+
+		$middleware = [];
+		foreach (array_unique($names) as $name) {
+			$middleware[$name] = $this->resolveMiddlewareClassName($name);
+		}
+
+		return $this->applyMiddlewareFilters($middleware, $route, $request);
+	}
+
+
+	/**
+	 * Get the class name for the given middleware.
+	 *
+	 * @param  string  $name
+	 * @return string
+	 */
+	public function resolveMiddlewareClassName($name)
+	{
+		return isset($this->middlewareNames[$name])
+					? $this->middlewareNames[$name]
+					: $name;
+	}
+
+	/**
+	 * Create a response instance from the given value.
+	 *
+	 * @param  mixed  $response
+	 * @param  \Symfony\Component\HttpFoundation\Request  $request
+	 * @return \Symfony\Component\HttpFoundation\Response
+	 */
+	public function prepareResponse($response, $request)
+	{
+		return $this->getResponse($response)->prepare($request);
+	}
+
+	/**
+	 * Get/Create a response instance from the given value.
+	 * If the given value is already a valid response instance,
+	 * it is returned as it is.
+	 *
+	 * @param  mixed  $response
+	 * @param  bool  $force
+	 * @return \Symfony\Component\HttpFoundation\Response
+	 */
+	public function getResponse($response)
+	{
+		if($response instanceof SymfonyResponse)
+			return $response;
+
+		if ($response instanceof PsrResponseInterface)
+			return (new HttpFoundationFactory)->createResponse($response);
+
+		return new Response($response);
+	}
+
+
+	/**
+	* Bind the given callback to a dispatching event.
+	*
+	* @param  string					$uri
+	* @param  \Closure|array|string 	$callback
+	* @param  int						$priority
+	*
+	* @return static
+	*/
+	public function dispatching($uri, $callback, $priority = null)
+	{
+		// $uri = $uri !== '*' ? Str::begin($uri, '/'): $uri;
+		$uri = Str::begin($uri, '/');
+
+		$this->bindEventCallback("dispatching {$uri}", $callback, $priority);
+
+		return $this;
+	}
+
+	/**
+	* Bind the given callback to a dispatched event.
+	*
+	* @param  string					$uri
+	* @param  \Closure|array|string 	$callback
+	* @param  int						$priority
+	*
+	* @return static
+	*/
+	public function dispatched($uri, $callback, $priority = null)
+	{
+		$uri = Str::begin($uri, '/');
+
+		$this->bindEventCallback("dispatching {$uri}", $callback, $priority);
+
+		return $this;
+	}
+
+
+	/**
+	* Bind the given callback to the before event.
+	* This event fires before the route for the given URI is run.
+	*
+	* @param  string					$uri
+	* @param  \Closure|array|string 	$callback
+	* @param  int						$priority
+	*
+	* @return static
+	*/
+	public function before($uri, $callback, $priority = null)
+	{
+		$uri = Str::begin($uri, '/');
+
+		$this->bindEventCallback("before.uri {$uri}", $callback, $priority);
+
+		return $this;
+	}
+
+	/**
+	* Bind the given callback to the after event.
+	* This event fires after the route for the given URI is run.
+	*
+	* @param  string					$uri
+	* @param  \Closure|array|string 	$callback
+	* @param  int						$priority
+	*
+	* @return static
+	*/
+	public function after($uri, $callback, $priority = null)
+	{
+		$uri = Str::begin($uri, '/');
+
+		$this->bindEventCallback("after.uri {$uri}", $callback, $priority);
+
+		return $this;
+	}
+
+
+	/**
+	* Bind the given callback to the routing event for the given route.
+	*
+	* @param  string					$routeName
+	* @param  \Closure|array|string 	$callback
+	* @param  int						$priority
+	*
+	* @return static
+	*/
+	public function routing($routeName, $callback, $priority = null)
+	{
+		$this->bindEventCallback("before.route {$routeName}", $callback, $priority);
+
+		return $this;
+	}
+
+	/**
+	* Bind the given callback to the routed event for the given route.
+	*
+	* @param  string					$routeName
+	* @param  \Closure|array|string 	$callback
+	* @param  int						$priority
+	*
+	* @return static
+	*/
+	public function routed($routeName, $callback, $priority = null)
+	{
+		$this->bindEventCallback("after.route {$routeName}", $callback, $priority);
+
+		return $this;
+	}
+
+	/**
+	* Add a middleware filter callback.
+	*
+	* @param  \Closure|array|string 	$callback
+	* @param  int						$priority
+	*
+	* @return static
+	*/
+	public function middlewareFilter($callback, $priority = null)
+	{
+		$this->bindEventCallback("middleware", $callback, $priority);
+
+		return $this;
+	}
+
+	/**
+	* Apply middleware filters.
+	*
+	* @param  \Closure|array|string 			$callback
+	* @param  \TeaPress\Routing\Route   		$route
+	* @param  \TeaPress\Contracts\Http\Request 	$request
+	* @return array
+	*/
+	protected function applyMiddlewareFilters(array $middleware, Route $route = null, Request $request = null)
+	{
+		$tag = $this->routerEventTag('middleware');
+
+		$middleware = $this->signals->filter($tag, $middleware, $route, $request, $this);
+
+		return is_array($middleware) ? $middleware : [];
+	}
+
+
+	/**
+	 * Call the given route's before filters.
+	 *
+	 * @param  \TeaPress\Routing\Route  $route
+	 * @param  \TeaPress\Http\Request   $request
+	 * @return mixed
+	 */
+	public function callRouteBefore($route, $request)
+	{
+		$response = $this->callRouteUriBefore($route, $request);
+
+		return $response ?: $this->callRouteNameBefore($route, $request);
+	}
+
+	/**
+	 * Call the URI pattern based filters for the request.
+	 *
+	 * @param  \TeaPress\Routing\Route  $route
+	 * @param  \TeaPress\Http\Request   $request
+	 * @return mixed
+	 */
+	protected function callRouteUriBefore($route, $request)
+	{
+		$uri = $this->requestUri($request);
+		return $this->fireEvent( "before.uri {$uri}", [$route, $request], true );
+	}
+
+	/**
+	 * Call the route name based filters for the request.
+	 *
+	 * @param  \TeaPress\Routing\Route  $route
+	 * @param  \TeaPress\Http\Request   $request
+	 * @return mixed
+	 */
+	protected function callRouteNameBefore($route, $request)
+	{
+		if($name = $route->getName())
+			return $this->fireEvent( "before.route {$name}", [$route, $request], true );
+	}
+
+	/**
+	 * Call the given route's after listeners.
+	 *
+	 * @param  \TeaPress\Routing\Route 						$route
+	 * @param  \TeaPress\Http\Request 						$request
+	 * @param  \Symfony\Component\HttpFoundation\Response   $response
+	 * @return void
+	 */
+	public function callRouteAfter($route, $request, $response)
+	{
+		$this->callRouteNameAfter($route, $request, $response);
+		$this->callRouteUriAfter($route, $request, $response);
+	}
+
+	/**
+	 * Call the given request's URI pattern based after listeners.
+	 *
+	 * @param  \TeaPress\Routing\Route 						$route
+	 * @param  \TeaPress\Http\Request 						$request
+	 * @param  \Symfony\Component\HttpFoundation\Response   $response
+	 * @return void
+	 */
+	public function callRouteUriAfter($route, $request, $response)
+	{
+		$uri = $this->requestUri($request);
+		$this->fireEvent( "after.uri {$uri}", [$route, $request, $response]);
+	}
+
+	/**
+	 * Call the given request's route name based after listeners.
+	 *
+	 * @param  \TeaPress\Routing\Route 						$route
+	 * @param  \TeaPress\Http\Request 						$request
+	 * @param  \Symfony\Component\HttpFoundation\Response   $response
+	 * @return void
+	 */
+	public function callRouteNameAfter($route, $request, $response)
+	{
+		if($name = $route->getName())
+			$this->fireEvent( "after.route {$name}", [$route, $request, $response]);
+	}
+
+
+	/**
+	* Get a complete router's event tag.
+	*
+	* @param string $event
+	*
+	* @return string|array
+	*/
+	public function routerEventTag($event)
+	{
+		return [ Contract::class, $event ];
+	}
+
+	/**
+	* Bind the given callback to the specified $event.
+	*
+	* @param  string					$event
+	* @param  \Closure|array|string 	$callback
+	* @param  int						$priority
+	*
+	* @return bool
+	*/
+	protected function bindEventCallback($event, $callback, $priority = null)
+	{
+		return $this->signals->bind($this->routerEventTag($event), $callback, $priority);
+	}
+
+
+	/**
+	* Call the a router's event.
+	*
+	* @param  string  $event
+	* @param  array   $payload
+	* @param  bool    $halt
+	*
+	* @return mixed
+	*/
+	protected function fireEvent($event, $payload = [], $halt = false)
+	{
+		$method = $halt ? 'until' : 'fire';
+
+		return $this->signals->$method($this->routerEventTag($event), (array) $payload);
+	}
 }

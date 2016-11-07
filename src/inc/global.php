@@ -206,7 +206,7 @@ function join_paths(...$fragments)
 	return Str::join(
 			DIRECTORY_SEPARATOR,
 			array_filter($fragments, function($fragment){
-				return $fragment !== "";
+				return (string) $fragment !== "";
 			})
 		);
 }
@@ -224,7 +224,7 @@ function join_uris(...$fragments)
 	}
 
 	return Str::join('/', array_filter($fragments, function($fragment){
-		return $fragment !== "";
+		return (string) $fragment !== "";
 	}));
 }
 

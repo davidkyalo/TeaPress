@@ -13,14 +13,13 @@ class Str extends Base
 	/**
 	 * Prefix a string with a single instance of a given value.
 	 *
-	 * @param  string  $value
+	 * @param  string  $string
 	 * @param  string  $prefix
 	 * @return string
 	 */
-	public static function begin($value, $prefix)
+	public static function begin($string, $prefix)
 	{
-		$quoted = preg_quote($prefix, '/');
-		return $prefix.preg_replace('/^(?:'.$quoted.')+/u', '', $value);
+		return $prefix.static::lstrip($string, $prefix);
 	}
 
 	/**
@@ -35,6 +34,24 @@ class Str extends Base
 	{
 		return  trim( preg_replace('/\s+/', $whitespace, $text) );
 	}
+
+
+	/**
+	 * Cap a string with a single instance of a given value.
+	 *
+	 * @param  string  $string
+	 * @param  string  $cap
+	 * @return string
+	 */
+	public static function finish($string, $cap)
+	{
+		return static::rstrip($string, $cap).$cap;
+
+		// $quoted = preg_quote($cap, '/');
+
+		// return preg_replace('/(?:'.$quoted.')+$/u', '', $value).$cap;
+	}
+
 
 	/**
 	 * Join provided pieces with single instances of the value (glue)
@@ -139,6 +156,8 @@ class Str extends Base
 
 	/**
 	 * Strip a substring from the specified part(s) of a string.
+	 * If value is not provided, beginning or/and trialling whitespaces are striped.
+	 *
 	 * You can set the max number of occurrences to be stripped by providing the limit.
 	 * By default, all occurrences are stripped.
 	 *
@@ -149,25 +168,55 @@ class Str extends Base
 	 *
 	 * If a part is not specified, Str::STRIP_BOTH which is equal to 0 is used.
 	 *
+	 * @param  string  	$string
 	 * @param  string  	$value
-	 * @param  string  	$substr
 	 * @param  int  	$limit
 	 * @param  int  	$parts
 	 * @return string
 	 */
-	public static function strip($value, $substr, $limit = -1, $parts = self::STRIP_BOTH)
+	public static function strip($string, $value = ' ', $limit = -1, $parts = self::STRIP_BOTH)
 	{
-		$quoted = preg_quote($substr, '/');
+		/**
+		 * If the substring being replaced is a single character or empty string,
+		 * we can simply use the 'trim' functions to avoid regex overhead.
+		*/
+		if(static::length($value) < 2 && $limit == -1){
+			switch ($parts) {
+				case self::STRIP_LEFT:
+					return ltrim($string, $value);
 
-		$limit = (int) $limit > 0 ? '{1,'.(int) $limit.'}' : '+';
+				case self::STRIP_RIGHT:
+					return rtrim($string, $value);
 
-		if($parts === static::STRIP_BOTH || $parts === static::STRIP_LEFT)
-			$value = preg_replace('/^(?:'.$quoted.')'.$limit.'/u', '', $value);
+				default:
+					return trim($string, $value);
+			}
+		}
 
-		if($parts === static::STRIP_BOTH || $parts === static::STRIP_RIGHT)
-			$value = preg_replace('/(?:'.$quoted.')'.$limit.'$/u', '', $value);
+		$quoted = preg_quote($value, '/');
 
-		return $value;
+		$limit = $limit > 0 ? '{1,'.$limit.'}' : '+';
+
+		switch ($parts) {
+			case self::STRIP_LEFT:
+				return preg_replace('/^(?:'.$quoted.')'.$limit.'/u', '', $string);
+
+			case self::STRIP_RIGHT:
+				return preg_replace('/(?:'.$quoted.')'.$limit.'$/u', '', $string);
+
+			default:
+				$start = '^(?:'.$quoted.')'.$limit.'';
+				$end = '(?:'.$quoted.')'.$limit.'$';
+				return preg_replace('/('.$start.'|'.$end.')/u', '', $string);
+		}
+
+		// if($parts === static::STRIP_BOTH || $parts === static::STRIP_LEFT)
+		// 	$string = $trim ? ltrim($string, $quoted) : preg_replace('/^(?:'.$quoted.')'.$limit.'/u', '', $string);
+
+		// if($parts === static::STRIP_BOTH || $parts === static::STRIP_RIGHT)
+		// 	$string = preg_replace('/(?:'.$quoted.')'.$limit.'$/u', '', $string);
+
+		// return $string;
 	}
 
 	/**
@@ -175,14 +224,14 @@ class Str extends Base
 	 * You can set the max number of occurrences to be stripped by providing the limit.
 	 * By default, all occurrences are stripped.
 	 *
+	 * @param  string  	$string
 	 * @param  string  	$value
-	 * @param  string  	$substr
 	 * @param  int  	$limit
 	 * @return string
 	 */
-	public static function lstrip($value, $substr, $limit = -1)
+	public static function lstrip($string, $value = ' ', $limit = -1)
 	{
-		return static::strip($value, $substr, $limit, static::STRIP_LEFT);
+		return static::strip($string, $value, $limit, static::STRIP_LEFT);
 	}
 
 	/**
@@ -190,14 +239,14 @@ class Str extends Base
 	 * You can set the max number of occurrences to be stripped by providing the limit.
 	 * By default, all occurrences are stripped.
 	 *
+	 * @param  string  	$string
 	 * @param  string  	$value
-	 * @param  string  	$substr
 	 * @param  int  	$limit
 	 * @return string
 	 */
-	public static function rstrip($value, $substr, $limit = -1)
+	public static function rstrip($string, $value = ' ', $limit = -1)
 	{
-		return static::strip($value, $substr, $limit, static::STRIP_RIGHT);
+		return static::strip($string, $value, $limit, static::STRIP_RIGHT);
 	}
 
 
@@ -240,6 +289,23 @@ class Str extends Base
 		$pad = str_repeat( $value, ceil( $space / static::length($value) ) );
 		$pad = substr( $pad, 0, $space );
 		return $size > 0 ? $text.$pad : $pad.$text;
+	}
+
+
+	/**
+	 * Wrap a string with single instances of the given prefix and suffix.
+	 * If suffix is not provided, the prefix is used.
+	 *
+	 * @param  string  $string
+	 * @param  string  $value
+	 * @return string
+	 */
+	public static function wrap($string, $prefix, $suffix = null)
+	{
+		if(is_null($suffix) || $prefix === $suffix)
+			return $prefix.static::strip($string, $prefix).$prefix;
+		else
+			return str::finish(static::begin($string, $prefix), $suffix);
 	}
 
 

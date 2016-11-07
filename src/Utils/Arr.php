@@ -51,6 +51,32 @@ class Arr extends BaseArr
 	}
 
 	/**
+	 * Build a new array using a callback.
+	 * In cases where the callback returns null on an item, that item is ommited from the resulting array.
+	 *
+	 * @param  array  $array
+	 * @param  callable  $callback
+	 * @return array
+	 */
+	public static function build($array, callable $callback)
+	{
+		$results = [];
+
+		foreach ($array as $key => $value) {
+			$keyValue = call_user_func($callback, $key, $value);
+
+			if(is_null($keyValue))
+				continue;
+
+			list($innerKey, $innerValue) = $keyValue;
+
+			$results[$innerKey] = $innerValue;
+		}
+
+		return $results;
+	}
+
+	/**
 	 * Flatten a multi-dimensional associative array with dots or the given notation.
 	 * If assoc_only=true, none associative arrays will be treated as values and won't be flattened.
 	 *
@@ -433,7 +459,7 @@ class Arr extends BaseArr
 		};
 
 		$filter = function($value) use ($target){
-			return !in_array($value, $target);
+			return !in_array($value, $target, true);
 		};
 
 		// return static::set($array, $key, array_merge( $target, array_udiff($items, $target, $compare) ) );
@@ -441,6 +467,58 @@ class Arr extends BaseArr
 		return static::set($array, $key, array_merge( $target, array_filter($items, $filter) ) );
 	}
 
+
+	/**
+	 * Appends only the non existing items to the end nested $array[$key] array in the multi-dimensional $array.
+	 * If the target array is not set, an empty one is created.
+	 *
+	 * @param  array   $array 			The root array
+	 * @param  string  $key 			Key to the nested array in "dot" or given notation
+	 * @param  mixed   $items 			The items to append
+	 *
+	 * @return array
+	 */
+	public static function _pushUnique(&$array, $key, ...$items)
+	{
+		$target = (array) static::get($array, $key, []);
+
+		$compare = function($a, $b){
+			if( $a === $b )
+				return 0;
+			elseif( $a > $b )
+				return 1;
+			elseif ($a < $b)
+				return -1;
+		};
+
+		$filter = function($value) use ($target){
+			return !in_array($value, $target, true);
+		};
+
+		// return static::set($array, $key, array_merge( $target, array_udiff($items, $target, $compare) ) );
+
+		return static::set($array, $key, array_merge( $target, array_filter($items, $filter) ) );
+	}
+
+	// public static function unique($array, $preserve_keys = true, $strict = true)
+	// {
+	// 	if($preserve_keys)
+	// 		asort($array);
+	// 	else
+	// 		sort($array);
+
+	// 	$item = NOTHING;
+	// 	$results = [];
+
+	// 	foreach ($array as $key => $value) {
+	// 		if($item === NOTHING || $value !== $item){
+	// 			$results[$key] = $value;
+	// 			$item = $value;
+	// 		}
+	// 	}
+
+	// 	return $results;
+	// }
 
 	/**
 	 * Appends a value to the nested $array[$key] array in the multi-dimensional $array.

@@ -25,6 +25,11 @@ class Application extends Container implements Contract
 	/**
 	 * @var string
 	 */
+	protected $baseUrl;
+
+	/**
+	 * @var string
+	 */
 	protected $basePath;
 
 	/**
@@ -139,15 +144,40 @@ class Application extends Container implements Contract
 		}
 	}
 
+
+	/**
+	* Set the current application's base URL.
+	*
+	* @param string $url
+	* @return void
+	*/
+	public function setBaseUrl($url)
+	{
+		$this->baseUrl = rtrim($url, '/');
+	}
+
+	/**
+	 * Get the application's base URL.
+	 *
+	 * @return string
+	 */
+	public function baseUrl()
+	{
+		return $this->baseUrl ? $this->baseUrl : rtrim(home_url(), '/');
+	}
+
+
 	/**
 	* Set the current application's base path.
 	*
+	* @param string $path
 	* @return void
 	*/
 	public function setBasePath($path)
 	{
 		$this->basePath = $path;
 	}
+
 
 	/**
 	* Get explicitly path(s).
