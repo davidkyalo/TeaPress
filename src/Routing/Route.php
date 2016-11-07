@@ -330,13 +330,19 @@ class Route implements Contract, Matchable
 		}
 
 		if($instance instanceof Actionable){
-			$parameters = $instance->beforeAction($request, $method, $parameters);
+			$newParameters = $instance->beforeAction($request, $method, $parameters);
+			if(!is_null($newParameters)){
+				$parameters = $newParameters;
+			}
 		}
 
 		$response = call_user_func_array([$instance, $method], $parameters);
 
 		if($instance instanceof Actionable){
-			$response = $instance->afterAction($response, $request, $method, $parameters);
+			$newResponse = $instance->afterAction($response, $request, $method, $parameters);
+			if(!is_null($newResponse)){
+				$response = $newResponse;
+			}
 		}
 
 		return $response;
