@@ -54,19 +54,16 @@ class Container extends IlluminateContainer implements Contract
 		}
 	}
 
-/*
-	public function getAbstractAccessor($abstract)
+	/**
+	 * Get the globally available instance of the container.
+	 *
+	 * @return static
+	 */
+	public static function getInstance()
 	{
-		$aliases = array_flip($this->aliases);
-		return isset($aliases[$abstract]) ? $aliases[$abstract] : $abstract;
+		if(is_null(static::$instance))
+			static::$instance = new static;
+
+		return static::$instance;
 	}
-
-
-	public function loadScript($__path, $__data = null, $__once = false)
-	{
-		extract( (array) $__data );
-		return $__once ? require_once($__path) : require( $__path );
-	}
-*/
-
 }
