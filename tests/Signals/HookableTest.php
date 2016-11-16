@@ -25,7 +25,7 @@ class HookableTest extends TestCase
 
 	protected function setUp()
 	{
-		$this->signals = $this->app('signals');
+		$this->signals = $this->container('signals');
 		$this->getHookable();
 
 	}

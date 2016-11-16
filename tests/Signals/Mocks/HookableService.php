@@ -20,21 +20,21 @@ class HookableService implements Contract
 
 	public function boot()
 	{
-		$this->emitSignal('booting');
+		$this->fireSignal('booting', $this);
 	}
 
 	public function start()
 	{
-		$this->emitSignal('starting');
+		$this->fireSignal('starting', $this);
 	}
 
 	public function runFilters()
 	{
-		return $this->applyFilters('filters', 300);
+		return $this->applyFilters('filters', 300, $this);
 	}
 
 	public function checkTag()
 	{
-		return $this->applyFilters('check_tag');
+		return $this->applyFilters('check_tag', null, $this);
 	}
 }

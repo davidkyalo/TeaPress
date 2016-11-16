@@ -1,9 +1,10 @@
 <?php
+namespace TeaPress\Utils\Debug;
 
 /**
 *
 */
-class ClassName extends AnotherClass
+class Logger
 {
 
 	function __construct(argument)

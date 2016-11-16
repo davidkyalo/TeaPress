@@ -3,12 +3,12 @@
 namespace TeaPress\Utils;
 
 use IteratorAggregate;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Arr as BaseArr;
+use TeaPress\Contracts\Utils\ArrayBag;
 use Illuminate\Contracts\Support\Jsonable;
 use Illuminate\Contracts\Support\Arrayable;
 use TeaPress\Contracts\Utils\ArrayBehavior;
-use Illuminate\Support\Collection as IlluminateCollection;
-
 
 class Arr extends BaseArr
 {
@@ -179,13 +179,11 @@ class Arr extends BaseArr
 	public static function first($array, callable $callback = null, $default = null)
 	{
 		if (is_null($callback)) {
-			if (count($array) === 0) {
+			if (count($array) === 0)
 				return value($default);
-			}
 
-			foreach ($array as $item) {
+			foreach ($array as $item)
 				return $item;
-			}
 		}
 
 		foreach ($array as $key => $value) {
@@ -590,7 +588,7 @@ class Arr extends BaseArr
 		if(is_array($object)){
 			return $object;
 		}
-		elseif ($object instanceof IlluminateCollection){
+		elseif ($object instanceof Collection || $object instanceof ArrayBag){
 			return $object->all();
 		}
 		elseif ($object instanceof IteratorAggregate){

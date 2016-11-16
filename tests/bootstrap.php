@@ -6,6 +6,9 @@ if(defined('ABSPATH'))
 if(!defined('DOING_UNIT_TESTS'))
 	define('DOING_UNIT_TESTS', true);
 
+if(!defined('TESTSPATH'))
+	define('TESTSPATH', __DIR__);
+
 if(!defined('WORDPRESS_ROOT_DIR'))
 	define('WORDPRESS_ROOT_DIR', __DIR__ .'/../../wordpress');
 

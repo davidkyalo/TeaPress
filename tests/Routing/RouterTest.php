@@ -241,22 +241,47 @@ class RouterTest extends TestCase
 	{
 		$router = $this->newRouter();
 
-		$router->group('foo', function($router){
-			$router->group(['prefix' => 'bar'], function($router){
-				$baz = $router->get('baz')->to(function(){
-					return "The Foo-Bar-Baz Response.";
-				})->as('mbaa');
-				$this->assertEquals('foo/bar/baz', $baz->getUri());
-			});
-		});
-
-		$router->routing('mbaa', function(){
-			return; // "The Mbaaa Response.";
+		$baz = $router->get('foo/bar/baz')->to(function(){
+			return "The Response!!";
 		});
 
 		$response = $router->dispatch( $this->request('/foo/bar/baz', 'GET') );
+		$this->assertInstanceOf('Symfony\Component\HttpFoundation\Response', $response);
+		$this->assertEquals("The Response!!", $response->getContent());
+	}
 
-		pprint("Dispatch", (string) $response);
+	public function testDispatchToController()
+	{
+		$router = $this->newRouter();
+
+		$baz = $router->get('user/{id:\d+}[/{foo}]')
+				->to('TeaPress\Tests\Routing\Mocks\Controller@param')
+				->default("foo", 'foo');
+
+		$response = $router->dispatch( $this->request('/user/25', 'GET') );
+		$this->assertEquals( '25,param,foo' , $response->getContent());
+	}
+
+	public function testDispatchToControllerWithActionChanged()
+	{
+		$router = $this->newRouter();
+
+		$baz = $router->get('foo')
+				->to('TeaPress\Tests\Routing\Mocks\Controller@change');
+
+		$response = $router->dispatch( $this->request('/foo', 'GET') );
+		$this->assertEquals( 'response changed' , $response->getContent());
+	}
+
+	public function testDispatchToControllerWithMissingAction()
+	{
+		$router = $this->newRouter();
+
+		$baz = $router->get('foo')
+				->to('TeaPress\Tests\Routing\Mocks\Controller@foo');
+
+		$response = $router->dispatch( $this->request('/foo', 'GET') );
+		$this->assertEquals( 'foo missing' , $response->getContent());
 	}
 
 	protected function request($path = '/test', $method = 'GET')

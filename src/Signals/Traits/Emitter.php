@@ -3,6 +3,7 @@
 namespace TeaPress\Signals\Traits;
 
 use Closure;
+use TeaPress\Signals\Tag;
 use BadMethodCallException;
 use TeaPress\Contracts\Signals\Hub as HubContract;
 
@@ -13,180 +14,120 @@ trait Emitter
 	/**
 	* Get this emitter's events namespace.
 	*
-	* @return string|null
-	*/
-	public static function setSignalsNamespace($namespace)
-	{
-		static::$signals_namespace = $namespace;
-	}
-
-	/**
-	* Get this emitter's events namespace.
-	*
-	* @return string|null
+	* @return string
 	*/
 	public static function getSignalsNamespace()
 	{
-		return isset( static::$signals_namespace ) ? static::$signals_namespace : null;
+		return isset( static::$signals_namespace ) ? static::$signals_namespace : get_called_class();
 	}
 
 	/**
-	*  Get the event's array name used for binding with the dispatcher.
+	*  Get the event's tag instance.
 	*
-	* @param  string		$tag
-	*
-	* @return string|array
+	* @param  string|TeaPress\Signals\Tag	$tag
+	* @return TeaPress\Signals\Tag
 	*/
-	public static function getHookTag( $tag )
+	public static function getSignalTag($tag)
 	{
-		$namespace = static::getSignalsNamespace();
-		return !is_null($namespace) ? $namespace .':'.$tag : [ get_called_class(), $tag ];
+		return $tag instanceof Tag ? $tag : new Tag($tag, static::getSignalsNamespace());
 	}
-
 
 	/**
 	* Bind the given callback to the specified event.
 	*
-	* @param  string						$hook
+	* @param  string						$tag
 	* @param  \Closure|array|string 		$callback
 	* @param  int|null						$priority
-	* @param  int|null|bool					$accepted_args
-	* @param  bool							$once
+	* @param  int|null 						$accepted_args
 	*
 	* @return bool
 	*/
-	protected static function bindCallback($hook, $callback, $priority = null, $accepted_args = null, $once = null)
+	protected static function bindCallback($tag, $callback, $priority = null, $accepted_args = null)
 	{
-		if($hub = static::getSignals()){
-			$hub->bind( static::getHookTag($hook), $callback, $priority, $accepted_args, $once);
+		if($signals = static::getSignals()){
+			$signals->bind( static::getSignalTag($tag), $callback, $priority, $accepted_args);
 			return true;
 		}
 
 		return false;
 	}
 
-
 	/**
 	* Unbind the given callback to the specified event.
 	*
-	* @param  string						$hook
+	* @param  string						$tag
 	* @param  \Closure|array|string 		$callback
 	* @param  int|null						$priority
 	*
 	* @return bool
 	*/
-	protected static function unbindCallback($hook, $callback, $priority = null)
+	protected static function unbindCallback($tag, $callback, $priority = null)
 	{
-		if($hub = static::getSignals()){
-			return $hub->unbind( static::getHookTag($hook), $callback, $priority);
+		if($signals = static::getSignals()){
+			return $signals->unbind( static::getSignalTag($tag), $callback, $priority);
 		}
 
 		return false;
 	}
 
-
-	// /**
-	//  * Get the number of times an action has been triggered.
-	//  *
-	//  * @param  string		$hook
-	//  *
-	//  * @return int
-	//  */
-	// public function didAction($hook)
-	// {
-	// 	if($hub = static::getSignals())
-	// 		return $hub->didAction( static::getHookTag( $hook ) );
-
-	// 	return 0;
-	// }
-
-	// /**
-	//  *  Get the number of times a filter has been evaluated
-	//  *
-	//  * @param  string		$hook
-	//  *
-	//  * @return int
-	//  */
-	// public function didFilter($hook)
-	// {
-	// 	if($hub = static::getSignals())
-	// 		return $hub->didFilter( static::getHookTag( $hook ) );
-
-	// 	return 0;
-	// }
-
 	/**
-	* Execute callbacks hooked the specified action.
+	* Execute callbacks hooked the specified event.
 	*
-	* @param  string			$hook
+	* @param  string			$tag
 	* @param  array				$payload
 	* @param  bool				$halt
-	*
 	* @return mixed
 	*/
-	protected function emitSignal($hook, ...$payload)
+	protected static function fireSignal($tag, $payload = [], $halt = false)
 	{
-		if( $hub = static::getSignals())
-		{
-			$tag = static::getHookTag($hook);
-
-			if(!in_array($this, $payload))
-				$payload[] = $this;
-
-			return $hub->emitSignalWith($tag, $payload, false);
-		}
+		if( $signals = static::getSignals())
+			return $signals->fire(static::getSignalTag($tag), $payload, $halt);
 	}
 
 
 	/**
 	* Execute callbacks hooked the specified action until the first non-null response is returned.
 	*
-	* @param  string			$hook
+	* @param  string			$tag
 	* @param  array				$payload
-	* @param  bool				$halt
-	*
 	* @return mixed
 	*/
-	protected function emitSignalUntil($hook, ...$payload)
+	protected static function fireSignalUntil($tag, $payload = [])
 	{
-		if( $hub = static::getSignals())
-		{
-			$tag = static::getHookTag($hook);
-
-			if(!in_array($this, $payload))
-				$payload[] = $this;
-
-			return $hub->emitSignalWith($tag, $payload, true);
-		}
+		if( $signals = static::getSignals())
+			return $signals->until(static::getSignalTag($tag), $payload);
 	}
 
 
 	/**
-	* Evaluate the final value by executing listeners hooked the specified emitter event.
+	* Pass the given item through filters registered under the given tag
+	* and return the final result.
 	*
-	* If $value is array and $payload is false, the value array is used as the payload with
-	* the first element as the value to evaluate.
-	*
-	* Calls \TeaPress\Hooks\Hub::evaluate()
+	* @param  string						$tag
+	* @param  mixed 						$payload
+	* @return mixed
+	*/
+	protected static function doAction($tag, ...$payload)
+	{
+		if( $signals = static::getSignals()){
+			return $signals->fire(static::getSignalTag($tag), $payload);
+		}
+	}
+
+	/**
+	* Pass the given item through filters registered under the given tag
+	* and return the final result.
 	*
 	* @param  string						$tag
 	* @param  mixed 						$item
 	* @param  array 						$payload
-	*
 	* @return mixed
 	*/
-	protected function applyFilters($hook, $item = null, ...$payload)
+	protected static function applyFilters($tag, $item = null, $payload = [])
 	{
-		if( $hub = static::getSignals()){
-
-			$tag = static::getHookTag($hook);
-
-			if(!in_array($this, $payload))
-				$payload[] = $this;
-
-			return $hub->applyFilters( $tag, $item, ...$payload);
+		if( $signals = static::getSignals()){
+			return $signals->filter(static::getSignalTag($tag), $item, $payload);
 		}
-
 		return $item;
 	}
 

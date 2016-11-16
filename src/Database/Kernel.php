@@ -1,13 +1,27 @@
 <?php
+namespace TeaPress\Database;
 
-namespace TeaPress\ORM;
+use TeaPress\Core\Kernel as BaseKernel;
+use TeaPress\Database\ORM\Model;
 
-use TeaPress\Arch\BaseKernel;
-use WeDevs\ORM\Eloquent\Resolver;
 
-class Kernel extends BaseKernel {
+class Kernel extends BaseKernel
+{
 
-	public function register(){
+	/**
+	 * Register the module's services.
+	 */
+	public function boot()
+	{
+		$this->setupWpDbConfig();
+
+	}
+
+	/**
+	 * Register the module's services.
+	 */
+	public function register()
+	{
 		$this->share('DB', function($app){
 			return Database::instance();
 		});
@@ -22,4 +36,18 @@ class Kernel extends BaseKernel {
 		});
 
 	}
+
+	/**
+	 * Setup WP's database configuration.
+	 */
+	protected function setupWpDbConfig()
+	{
+		$config = $this->app['config'];
+		if(!$config->has()){
+			$config->set('database.connections.wp', [
+
+			];
+		}
+	}
+
 }

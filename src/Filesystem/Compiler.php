@@ -575,6 +575,6 @@ class Compiler implements ArrayBehavior, Arrayable, IteratorAggregate
 			throw new RuntimeException('Method "'.$method.'" not defined. And the scope for script "'.$this->path().'" has not been set.');
 		}
 
-		return $scope->$method(...$args);
+		return call_user_func_array([$scope, $method], $args);
 	}
 }

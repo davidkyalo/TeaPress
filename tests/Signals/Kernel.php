@@ -1,7 +1,8 @@
 <?php
 namespace TeaPress\Tests\Signals;
 
-use TeaPress\Signals\Hub;
+use TeaPress\Signals\Signals;
+use TeaPress\Signals\TagResolver;
 use TeaPress\Signals\Traits\Online;
 use TeaPress\Tests\Base\TestKernel;
 use TeaPress\Tests\Signals\Mocks\HookableService;
@@ -14,8 +15,9 @@ class Kernel extends TestKernel
 		return [
 			'signals' => [
 				'events',
-				'TeaPress\Signals\Hub',
+				'TeaPress\Signals\Signals',
 				'TeaPress\Contracts\Signals\Hub',
+				'TeaPress\Contracts\Signals\Signals',
 				'Illuminate\Contracts\Events\Dispatcher'
 			],
 			'signals.hookable_mock' => [
@@ -29,7 +31,7 @@ class Kernel extends TestKernel
 		$this->registerFactory();
 		$this->registerHub();
 		$this->registerHookableService();
-
+		$this->registerTagResolver();
 		$this->aliasServices($this->serviceAliases());
 	}
 
@@ -38,6 +40,13 @@ class Kernel extends TestKernel
 	{
 		$this->app->singleton('signals', function($app) {
 			return $app->make('signals.factory');
+		});
+	}
+
+	public function registerTagResolver()
+	{
+		$this->app->singleton('signals.tag_resolver', function($app) {
+			return new TagResolver($app);
 		});
 	}
 
@@ -56,7 +65,7 @@ class Kernel extends TestKernel
 
 			$container = isset($args['app']) ? $args['app'] : $app;
 
-			$hub = new Hub( $container );
+			$hub = new Signals( $container, $app['signals.tag_resolver'] );
 
 			Online::setSignals($hub);
 

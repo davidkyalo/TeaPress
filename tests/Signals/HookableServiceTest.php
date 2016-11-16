@@ -19,7 +19,7 @@ class HookableServiceTest extends ServiceTestCase
 	protected function setUp()
 	{
 		parent::setUp();
-		$this->signals = $this->app('signals');
+		$this->signals = $this->container('signals');
 	}
 
 

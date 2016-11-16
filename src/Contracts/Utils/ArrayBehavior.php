@@ -4,7 +4,8 @@ namespace TeaPress\Contracts\Utils;
 use Countable;
 use ArrayAccess;
 
-interface ArrayBehavior extends ArrayAccess, Countable {
+interface ArrayBehavior extends ArrayAccess, Countable
+{
 
 	/**
 	 * Get an array of all the offsets (keys)

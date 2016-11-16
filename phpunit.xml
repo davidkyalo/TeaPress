@@ -7,8 +7,8 @@
 			convertNoticesToExceptions="true"
 			convertWarningsToExceptions="true"
 			processIsolation="false"
-			stopOnFailure="false"
-			syntaxCheck="false"
+			stopOnFailure="true"
+			syntaxCheck="true"
 			debug="true"
 			strict="true"
 			bootstrap="./tests/bootstrap.php">
@@ -51,6 +51,14 @@
 
 		<testsuite name="core.app">
 			<directory>./tests/Core/Application</directory>
+		</testsuite>
+
+		<testsuite name="shortcode">
+			<directory>./tests/Shortcode</directory>
+		</testsuite>
+
+		<testsuite name="benchmarks">
+			<directory>./tests/Benchmarks</directory>
 		</testsuite>
 
 	</testsuites>

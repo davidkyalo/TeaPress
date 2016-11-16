@@ -22,16 +22,16 @@ class Hookable implements Contract
 
 	public function boot()
 	{
-		$this->emitSignal('booting');
+		$this->fireSignal('booting', $this);
 	}
 
 	public function start()
 	{
-		$this->emitSignal('starting');
+		$this->fireSignal('starting', $this);
 	}
 
 	public function runFilters()
 	{
-		return $this->applyFilters('filters', null);
+		return $this->applyFilters('filters', null, $this);
 	}
 }

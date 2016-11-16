@@ -20,6 +20,7 @@
 		"illuminate/support": "5.1.*",
 		"illuminate/http"	: "5.1.*",
 		"illuminate/view"	: "5.1.*",
+		"illuminate/bus"	: "5.1.*",
 		"symfony/translation": "2.7.*",
 		"symfony/finder": "2.7.*",
 		"nikic/fast-route": "^1.0",

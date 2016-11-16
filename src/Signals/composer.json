@@ -1,0 +1,26 @@
+{
+	"name": "teapress/signals",
+	"description": "Teapress events, actions and filters package.",
+	"authors": [
+		{
+			"name": "David Kyalo",
+			"email": "davidmkyalo@gmail.com"
+		}
+	],
+	"require": {
+		"php": "^5.6 || ^7.0",
+		"teapress/utils"	: "0.1.*",
+		"teapress/contracts"	: "5.1.*",
+	},
+	"autoload": {
+		"psr-4": {
+			"TeaPress\\Signals\\" : ""
+		}
+	},
+	"extra": {
+		"branch-alias": {
+			"dev-master": "0.1.0-dev"
+		}
+	},
+	"minimum-stability": "dev"
+}

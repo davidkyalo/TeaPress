@@ -276,7 +276,7 @@ class Filesystem extends IlluminateFilesystem implements Contract
 	 *
 	 * @return array
 	 */
-	protected function parseScriptVars($vars, $scope)
+	protected function parseScriptVars($vars, $scope = NOTHING)
 	{
 		if($scope === NOTHING){
 			if(is_string($vars) || is_object($vars))
@@ -288,7 +288,7 @@ class Filesystem extends IlluminateFilesystem implements Contract
 		}
 
 		if(!is_array($vars))
-			$var = [];
+			$vars = [];
 
 		return [$scope, $vars];
 	}
@@ -833,7 +833,7 @@ class Filesystem extends IlluminateFilesystem implements Contract
 	 * @param  bool    $force
 	 * @return bool
 	 */
-	public function makeDirectory($path, $mode = 0755, $recursive = false, $force = false)
+	public function makeDirectory($path, $mode = 0755, $recursive = true, $force = false)
 	{
 		if ($force) {
 			return @mkdir($path, $mode, $recursive);

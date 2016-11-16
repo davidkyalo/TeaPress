@@ -40,8 +40,16 @@ class Container extends IlluminateContainer implements Contract {
 	 */
 	public function alias($abstract, $alias)
 	{
-		foreach ((array) $alias as $alias) {
-			 parent::alias($abstract, $alias);
+		if( !is_array($aliases) )
+			return parent::alias($abstract, $aliases);
+
+		if( !is_null($abstract) )
+			$aliases = [ $abstract => $aliases ];
+
+		foreach ($aliases as $abstract => $aliases) {
+			foreach ((array) $aliases as $alias) {
+				parent::alias($abstract, $alias);
+			}
 		}
 	}
 

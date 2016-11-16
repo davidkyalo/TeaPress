@@ -4,35 +4,35 @@ namespace TeaPress\Signals\Traits;
 
 use Closure;
 use BadMethodCallException;
-use TeaPress\Contracts\Signals\Hub as Signals;
+use TeaPress\Contracts\Signals\Signals;
 
 trait Online {
 
 	/**
-	 * @var \TeaPress\Contracts\Signals\Hub
+	 * @var \TeaPress\Contracts\Signals\Signals
 	 */
-	protected static $signals_hub;
+	protected static $_signals;
 
 	/**
-	* Get the signals hub instance
+	* Get the signals instance
 	*
-	* @return \TeaPress\Contracts\Signals\Hub
+	* @return \TeaPress\Contracts\Signals\Signals
 	*/
 	public static function getSignals()
 	{
-		return static::$signals_hub;
+		return static::$_signals;
 	}
 
 	/**
-	* Set the signals hub instance
+	* Set the signals instance
 	*
-	* @param  \TeaPress\Contracts\Signals\Hub		$hub
+	* @param  \TeaPress\Contracts\Signals\Signals	$signals
 	*
 	* @return void
 	*/
-	public static function setSignals(Signals $hub)
+	public static function setSignals(Signals $signals)
 	{
-		static::$signals_hub = $hub;
+		static::$_signals = $signals;
 	}
 
 }

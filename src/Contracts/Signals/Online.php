@@ -6,17 +6,17 @@ interface Online {
 	/**
 	* Get the hooks hub instance
 	*
-	* @return \TeaPress\Contracts\Signals\Hub
+	* @return \TeaPress\Contracts\Signals\Signals
 	*/
 	public static function getSignals();
 
 	/**
 	* Set the hooks hub instance
 	*
-	* @param  \TeaPress\Contracts\Signals\Hub		$hub
+	* @param  \TeaPress\Contracts\Signals\Signals	$signals
 	*
 	* @return void
 	*/
-	public static function setSignals(Hub $hub);
+	public static function setSignals(Signals $signals);
 
 }

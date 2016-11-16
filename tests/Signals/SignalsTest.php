@@ -1,22 +1,22 @@
 <?php
 namespace TeaPress\Tests\Signals;
 
-use TeaPress\Signals\Hub;
+use TeaPress\Signals\Signals;
 use TeaPress\Tests\Base\ServiceTestCase;
 
 use TeaPress\Tests\Signals\Mocks\Handler;
 
-class HubTest extends ServiceTestCase
+class SignalsTest extends ServiceTestCase
 {
 
 	/**
-	* @var \TeaPress\Signals\Hub
+	* @var \TeaPress\Signals\Signals
 	*/
 	protected $signals;
 
 	protected $serviceName = 'signals';
 
-	protected $serviceClass = Hub::class;
+	protected $serviceClass = Signals::class;
 
 	protected function methodTag($method)
 	{
@@ -43,29 +43,36 @@ class HubTest extends ServiceTestCase
 		$this->assertEquals( 'emitter:normal.event', $this->signals->getTag('emitter:normal.event') );
 	}
 
-	public function testGetTagArray()
+	public function testTagInstance()
 	{
 		$tag = ['some_namespace', 'the_event'];
+		$this->assertInstanceOf( 'TeaPress\Signals\Tag', $this->signals->tag($tag[1], $tag[0]) );
+	}
 
-		$this->assertEquals( join(':', $tag), $this->signals->getTag($tag) );
+	public function testGetTagWithTagInstance()
+	{
+		$tag = ['some_namespace', 'the_event'];
+		$itag = $this->signals->tag($tag[1], $tag[0]);
+
+		$this->assertEquals( join(':', $tag), $this->signals->getTag($itag) );
 	}
 
 	public function testGetTagRegisteredServiceName()
 	{
 		$tag = ['signals', 'event_name'];
-		$this->assertEquals( join(':', $tag), $this->signals->getTag($tag) );
+		$this->assertEquals( join(':', $tag), $this->signals->getTag($tag[1], $tag[0]) );
 	}
 
 	public function testGetTagRegisteredServiceClassName()
 	{
-		$tag = [ Hub::class, 'event_name'];
-		$this->assertEquals( 'signals:event_name', $this->signals->getTag($tag) );
+		$tag = [ Signals::class, 'event_name'];
+		$this->assertEquals( 'signals:event_name', $this->signals->getTag($tag[1], $tag[0]) );
 	}
 
 	public function testGetTagRegisteredServiceInstance()
 	{
 		$tag = [ $this->signals, 'event_name'];
-		$this->assertEquals( 'signals:event_name', $this->signals->getTag($tag) );
+		$this->assertEquals( 'signals:event_name', $this->signals->getTag($tag[1], $tag[0]) );
 	}
 
 	public function testAddAction()
@@ -109,34 +116,6 @@ class HubTest extends ServiceTestCase
 		$this->signals->doAction($tag, $args[0], $args[1], $args[2]);
 	}
 
-
-	public function testEmit()
-	{
-		$tag = $this->methodTag(__METHOD__);
-
-		$args = [ 'arg1', 'arg2', 'arg3' ];
-
-		$this->signals->addAction($tag, function() use($args){
-			$this->assertEquals($args, func_get_args());
-		});
-
-		$this->signals->emit($tag, $args[0], $args[1], $args[2]);
-	}
-
-
-	public function testEmitSignalWith()
-	{
-		$tag = $this->methodTag(__METHOD__);
-
-		$args = [ 'arg1', 'arg2', 'arg3' ];
-
-		$this->signals->addAction($tag, function() use($args){
-			$this->assertEquals($args, func_get_args());
-		});
-
-		$this->signals->emitSignalWith($tag, $args);
-	}
-
 	public function testApplyFilters()
 	{
 		$tag = $this->methodTag(__METHOD__);
@@ -171,21 +150,6 @@ class HubTest extends ServiceTestCase
 		$this->assertEquals(2, $this->signals->filter( $tag, 0, 1) );
 	}
 
-	public function testApplyFiltersWith()
-	{
-		$tag = $this->methodTag(__METHOD__);
-
-		$this->signals->bind($tag, function($value, $mult){
-			return $value * $mult;
-		});
-
-		$this->signals->bind($tag, function($value, $mult) {
-			return $value * $mult;
-		});
-
-		$this->assertEquals(4, $this->signals->applyFiltersWith( $tag, [1,2]) );
-	}
-
 	public function testClassBasedCallback()
 	{
 		$tag = $this->methodTag(__METHOD__);
@@ -201,7 +165,7 @@ class HubTest extends ServiceTestCase
 
 		$this->signals->bind( $tag, Handler::class);
 
-		$this->assertEquals(6, $this->signals->filter( $tag, 3, 'multiply', 2) );
+		$this->assertEquals(6, $this->signals->filter( $tag, 3, ['multiply', 2]) );
 	}
 
 	public function testIsDoing()
@@ -227,31 +191,7 @@ class HubTest extends ServiceTestCase
 		$this->assertEquals($tag, $this->signals->filter($tag));
 	}
 
-	public function testOnce()
-	{
-		$tag = $this->methodTag(__METHOD__);
-
-		$this->signals->once($tag, function($value){
-			return $value+1;
-		});
-
-		$value_1 = $this->signals->filter( $tag, 1);
-		$value_2 = $this->signals->filter( $tag, $value_1);
-
-		$this->assertEquals($value_1, $value_2);
-	}
-
-
-	public function testIsBound()
-	{
-		$tag = $this->methodTag(__METHOD__);
-
-		$this->signals->bind($tag, Handler::class);
-
-		$this->assertTrue($this->signals->isBound(Handler::class, $tag));
-	}
-
-	public function testUnbind()
+	public function testUnbindClosure()
 	{
 		$tag = $this->methodTag(__METHOD__);
 		$callback = function(){
@@ -264,9 +204,61 @@ class HubTest extends ServiceTestCase
 
 		$this->signals->unbind($tag, $callback, 20);
 
-		$is_bound = $this->signals->isBound($callback);
+		$removed = !$this->signals->has($tag, $callback);
 
-		$this->assertTrue( ( $has && !$is_bound ) );
+		$this->assertTrue( ( $has && $removed ) );
+	}
+
+	public function testUnbindClassMethodString()
+	{
+		$tag = $this->methodTag(__METHOD__);
+
+		$callback = 'Foo\SomeClass@handle';
+
+		$this->signals->bind($tag, $callback, 20);
+
+		$has = $this->signals->has($tag, $callback);
+
+		$this->signals->unbind($tag, $callback, 20);
+
+		$removed = !$this->signals->has($tag, $callback);
+
+		$this->assertTrue( ( $has && $removed ) );
+	}
+
+	public function testUnbindStaticClassMethodArray()
+	{
+		$tag = $this->methodTag(__METHOD__);
+
+		$callback = ['Foo\SomeClass','handle'];
+
+		$this->signals->bind($tag, $callback, 20);
+
+		$has = $this->signals->has($tag, $callback);
+
+		$this->signals->unbind($tag, $callback, 20);
+
+		$removed = !$this->signals->has($tag, $callback);
+
+		$this->assertTrue( ( $has && $removed ) );
+	}
+
+
+	public function testUnbindClassMethodArray()
+	{
+		$tag = $this->methodTag(__METHOD__);
+
+		$callback = [ $this,'handle'];
+
+		$this->signals->bind($tag, $callback, 20);
+
+		$has = $this->signals->has($tag, $callback);
+
+		$this->signals->unbind($tag, $callback, 20);
+
+		$removed = !$this->signals->has($tag, $callback);
+
+		$this->assertTrue( ( $has && $removed ) );
 	}
 
 }

@@ -1,13 +1,13 @@
 <?php
 namespace TeaPress\Tests\Signals\Mocks;
 
-use TeaPress\Contracts\Signals\Hub;
+use TeaPress\Contracts\Signals\Signals;
 
 class Handler
 {
 	protected $hub;
 
-	public function __construct(Hub $hub)
+	public function __construct(Signals $hub)
 	{
 		$this->hub = $hub;
 	}

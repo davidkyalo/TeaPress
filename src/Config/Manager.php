@@ -6,16 +6,23 @@ use ArrayIterator;
 use IteratorAggregate;
 use TeaPress\Utils\Arr;
 use InvalidArgumentException;
+use TeaPress\Contracts\Core\Container;
+use TeaPress\Contracts\Signals\Signals;
 use TeaPress\Contracts\Utils\Arrayable;
 use TeaPress\Contracts\Config\Filterable;
 use TeaPress\Contracts\Utils\ArrayBehavior;
 use Illuminate\Support\NamespacedItemResolver;
-use TeaPress\Contracts\Signals\Hub as Signals;
 use TeaPress\Contracts\Config\Manager as Contract;
 use TeaPress\Contracts\Config\Repository as RepositoryContract;
 
 class Manager extends NamespacedItemResolver implements Contract, Filterable, ArrayBehavior, Arrayable, IteratorAggregate
 {
+	/**
+	 * The Container instance
+	 *
+	 * @var \TeaPress\Contracts\Core\Container
+	 */
+	protected $container;
 
 	/**
 	 * The Loader Interface.
@@ -25,9 +32,9 @@ class Manager extends NamespacedItemResolver implements Contract, Filterable, Ar
 	protected $loader;
 
 	/**
-	 * The Signals Hub
+	 * The Signals instance
 	 *
-	 * @var \TeaPress\Contracts\Signals\Hub
+	 * @var \TeaPress\Contracts\Signals\Signals
 	 */
 	protected $signals;
 
@@ -55,16 +62,34 @@ class Manager extends NamespacedItemResolver implements Contract, Filterable, Ar
 	/**
 	 * Create a new configuration repository.
 	 *
-	 * @param  \TeaPress\Config\LoaderInterface  $loader
-	 * @param  \TeaPress\Contracts\Signals\Hub  $signals
+	 * @param  \TeaPress\Contracts\Core\Container 	$container
+	 * @param  \TeaPress\Contracts\Signals\Signals	$signals
+	 * @param  \TeaPress\Config\LoaderInterface 	$loader
 	 * @param  string|array|null  $paths
 	 * @return void
 	 */
-	public function __construct(LoaderInterface $loader, Signals $signals, $paths = null)
+	public function __construct(Container $container, Signals $signals, LoaderInterface $loader, $paths = null)
 	{
 		$this->loader = $loader;
 		$this->signals = $signals;
+		$this->container = $container;
+		$this->bindToContainer();
 		$this->addPath($paths);
+	}
+
+	/**
+	 * Bind the manager to the service container.
+	 *
+	 * @return void
+	 */
+	protected function bindToContainer()
+	{
+		$this->container->instance('config', $this);
+		$this->container->alias('config', [
+			'TeaPress\Config\Manager',
+			'TeaPress\Contracts\Config\Manager',
+			'TeaPress\Contracts\Config\Repository',
+		]);
 	}
 
 	/**
@@ -228,9 +253,17 @@ class Manager extends NamespacedItemResolver implements Contract, Filterable, Ar
 				$this->repositories[$namespace] = $repository;
 			}
 			else{
-				$msg = "Invalid configuration repository type. Instance of '".RepositoryContract::class."'' expected.";
+				$msg = "Config repository should be an instance of '".RepositoryContract::class."''.";
 				throw new InvalidArgumentException($msg);
 			}
+		}
+
+		if(is_string($repository)){
+			$repository = $this->makeRepository()
+		}
+
+		if( !($repository instanceof RepositoryContract) ){
+
 		}
 
 		if(!is_null($path)){
@@ -239,7 +272,7 @@ class Manager extends NamespacedItemResolver implements Contract, Filterable, Ar
 
 		if( is_null($repository) ){
 			$config = $this->loader->loadNamespace($namespace);
-			$repository = $this->repositories[$namespace] = $this->newRepository($config, $namespace);
+			$repository = $this->repositories[$namespace] = $this->makeRepository($config, $namespace);
 		}
 
 		$repository->setSignals($this->signals);
@@ -272,6 +305,23 @@ class Manager extends NamespacedItemResolver implements Contract, Filterable, Ar
 	public function isLoaded($namespace)
 	{
 		return isset($this->repositories[$namespace]) && !is_null($this->repositories[$namespace]);
+	}
+
+	/**
+	 * Create a new repository instance from the given class.
+	 *
+	 * @param  string  $repository
+	 * @param  array   $config
+	 * @param  string  $namespace
+	 *
+	 * @return \TeaPress\Config\Repository
+	 */
+	protected function makeRepository($repository, array $config = [], $namespace = null, $signalsNamespace = null)
+	{
+		$repository = $this->container->make($repository, ['items' => $config]);
+		$repository->setNamespace($namespace);
+		$repository->setSignalsNamespace($signalsNamespace);
+		return new Repository($config, $namespace);
 	}
 
 	/**
@@ -397,7 +447,7 @@ class Manager extends NamespacedItemResolver implements Contract, Filterable, Ar
 	 */
 	public function getNamespace($namespace = null)
 	{
-		return $namespace ?: '*';
+		return $namespace ?: 'main';
 	}
 
 	/**
@@ -411,12 +461,10 @@ class Manager extends NamespacedItemResolver implements Contract, Filterable, Ar
 		//
 	}
 
-
-
 	/**
 	 * Get the signals hub instance.
 	 *
-	 * @return \TeaPress\Contracts\Signals\Hub
+	 * @return \TeaPress\Contracts\Signals\Signals
 	 */
 	public function getSignals()
 	{
@@ -427,7 +475,7 @@ class Manager extends NamespacedItemResolver implements Contract, Filterable, Ar
 	/**
 	 * Set the signals hub instance.
 	 *
-	 * @param  \TeaPress\Contracts\Signals\Hub  $key
+	 * @param  \TeaPress\Contracts\Signals\Signals  $key
 	 *
 	 * @return void
 	 */

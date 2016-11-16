@@ -6,9 +6,14 @@ use TeaPress\Tests\Container;
 
 trait AppTrait
 {
+	protected static $_app_depreciated_noticed = false;
 
 	public function app($service = null, $parameters = null)
 	{
+		if(!static::$_app_depreciated_noticed){
+			trigger_error("NOTICE: Method ".__METHOD__." is depreciated. Use container() instead.");
+			static::$_app_depreciated_noticed = true;
+		}
 		return $this->container($service, $parameters);
 	}
 

@@ -346,8 +346,17 @@ class Application extends Container implements Contract
 	 */
 	public function isDebug()
 	{
-		$default = defined('WP_DEBUG') ? WP_DEBUG : false;
-		return $this->bound('config') ? $this->make('config')->get('app.debug', $default) : $default;
+		if(!$this->bound('config')){
+			return defined('WP_DEBUG') ? WP_DEBUG : false;
+		}
+
+		$config = $this->make('config');
+		$debug = $config->get('app.debug');
+
+		if(is_null($debug))
+			$config->set('app.debug', $debug = (defined('WP_DEBUG') ? WP_DEBUG : false));
+
+		return $debug;
 	}
 
 
@@ -1080,29 +1089,6 @@ class Application extends Container implements Contract
 
 		if ($this->ready)
 			$this->fireAppCallbacks('ready');
-	}
-
-	/**
-	* Alias a type to a different name.
-	*
-	* @param  string|null  $abstract
-	* @param  string|array  $aliases
-	*
-	* @return void
-	*/
-	public function alias($abstract, $aliases)
-	{
-		if( !is_array($aliases) )
-			return parent::alias($abstract, $aliases);
-
-		if( !is_null($abstract) )
-			$aliases = [ $abstract => $aliases ];
-
-		foreach ($aliases as $abstract => $aliases) {
-			foreach ((array) $aliases as $alias) {
-				$this->alias($abstract, $alias);
-			}
-		}
 	}
 
 	/**

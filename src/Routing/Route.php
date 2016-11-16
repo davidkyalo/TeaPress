@@ -8,12 +8,13 @@ use LogicException;
 use ReflectionFunction;
 use TeaPress\Utils\Str;
 use TeaPress\Utils\Arr;
+use TeaPress\Utils\Bag;
 use TeaPress\Core\Container;
 use InvalidArgumentException;
 use UnexpectedValueException;
 use TeaPress\Contracts\Http\Request;
 use TeaPress\Routing\Matching\Matchable;
-use TeaPress\Contracts\Utils\Actionable;
+use TeaPress\Contracts\General\Actionable;
 use TeaPress\Contracts\Routing\Route as Contract;
 use Illuminate\Http\Exception\HttpResponseException;
 use TeaPress\Contracts\Core\Container as ContainerContract;
@@ -130,7 +131,7 @@ class Route implements Contract, Matchable
 	 */
 	public function handler($handler, $namespace = true)
 	{
-		if( $namespace && $this->namespace && $this->handlerReferencesController($handler) )
+		if( $namespace && $this->namespace && $this->isCallableClassMethod($handler) )
 			$this->handler = trim($this->namespace, '\\').'\\'.trim($handler, '\\');
 		else
 			$this->handler = $handler;
@@ -186,9 +187,21 @@ class Route implements Contract, Matchable
 	 * @param  mixed  $value
 	 * @return static
 	 */
-	public function defaults($key, $value)
+	public function default($key, $value)
 	{
 		$this->defaults[$key] = $value;
+		return $this;
+	}
+
+	/**
+	 * Set an array of default values.
+	 *
+	 * @param  array  $defaults
+	 * @return static
+	 */
+	public function defaults(array $defaults)
+	{
+		$this->defaults = array_replace($this->defaults, $defaults);
 		return $this;
 	}
 
@@ -241,11 +254,8 @@ class Route implements Contract, Matchable
 	public function bindParameters(array $parameters)
 	{
 		$parameters = $this->replaceDefaults($parameters);
-
 		list($named, $anonymous) = $this->parseParameters( $parameters );
-
 		$this->parameters = array_merge($named, $anonymous);
-
 		return $this;
 	}
 
@@ -257,86 +267,69 @@ class Route implements Contract, Matchable
 	 */
 	public function run(Request $request)
 	{
-		$this->container = $this->container ?: new Container;
-
 		try {
-
-			if( $this->handlerReferencesController($this->handler) ){
-				return $this->runController($request);
+			$handler = $this->parseHandler($this->handler);
+			if( $this->isCallableClassMethod($handler) ){
+				return $this->runClassMethod($handler, $this->parametersWithoutNulls());
 			}
-
-			return $this->runCallable($request);
-
-		} catch (HttpResponseException $e) {
+			return $this->runCallable($handler, $this->parametersWithoutNulls());
+		}
+		catch (HttpResponseException $e) {
 			return $e->getResponse();
 		}
 	}
 
 	/**
-	 * Run the route action and return the response.
+	 * Run a callable handler.
 	 *
-	 * @param  \TeaPress\Http\Request  $request
+	 * @param  \Closure|array|string 	$handler
+	 * @param  array 					$parameters
+	 * @return mixed
 	 *
 	 * @throws \Symfony\Component\HttpKernel\Exception\NotFoundHttpException
-	 * @return mixed
 	 */
-	protected function runCallable(Request $request)
+	protected function runCallable($handler, $parameters = [])
 	{
-		if(is_array($this->handler))
-			$parameters = $this->resolveClassMethodDependencies(
-					$this->parametersWithoutNulls(), $this->handler[0], $this->handler[1]
-				);
-		else
-			$parameters = $this->resolveMethodDependencies(
-					$this->parametersWithoutNulls(), new ReflectionFunction($this->handler)
-				);
-
-		if (is_array($this->handler) && !method_exists($this->handler[0], $this->handler[1]) ) {
+		if(!is_callable($handler)){
 			throw new NotFoundHttpException;
 		}
 
-		return call_user_func_array($this->handler, $parameters);
+		return $this->container->call($handler, $parameters);
 	}
 
 	/**
-	 * Run the route action and return the response.
+	 * Run handler which is in the Class@method syntax.
 	 *
-	 * @param  \TeaPress\Http\Request  $request
+	 * @param  string $handler
+	 * @param  array $parameters
 	 * @return mixed
 	 *
+	 * @throws \InvalidArgumentException
 	 * @throws \Symfony\Component\HttpKernel\Exception\NotFoundHttpException
 	 */
-	protected function runController(Request $request)
+	protected function runClassMethod($handler, $parameters = [])
 	{
-		list($class, $method) = array_pad(explode('@', $this->handler), 2, 'dispatch');
-
-		$parameters = $this->resolveClassMethodDependencies(
-				$this->parametersWithoutNulls(), $class, $method
-			);
+		list($class, $method) = array_pad(explode('@', $handler), 2, null);
 
 		$instance = $this->container->make($class);
 
+		$parameters = Bag::create($parameters);
+
+		if($instance instanceof Actionable){
+			$method = $instance->beforeAction($method, $parameters) ?: $method;
+		}
+
 		if (!method_exists($instance, $method)) {
 			if($instance instanceof Actionable)
-				return $instance->missingAction($request, $method, $parameters);
+				return $instance->missingAction($method, $parameters);
 			else
 				throw new NotFoundHttpException;
 		}
 
-		if($instance instanceof Actionable){
-			$newParameters = $instance->beforeAction($request, $method, $parameters);
-			if(!is_null($newParameters)){
-				$parameters = $newParameters;
-			}
-		}
-
-		$response = call_user_func_array([$instance, $method], $parameters);
+		$response = $this->runCallable([$instance, $method], $parameters->all());
 
 		if($instance instanceof Actionable){
-			$newResponse = $instance->afterAction($response, $request, $method, $parameters);
-			if(!is_null($newResponse)){
-				$response = $newResponse;
-			}
+			$response = $instance->afterAction($response, $method, $parameters);
 		}
 
 		return $response;
@@ -438,7 +431,7 @@ class Route implements Contract, Matchable
 	 */
 	public function getController()
 	{
-		return $this->handlerReferencesController($this->handler) ? $this->handler : null;
+		return $this->isCallableClassMethod($this->handler) ? $this->handler : null;
 	}
 
 	/**
@@ -620,12 +613,12 @@ class Route implements Contract, Matchable
 	 */
 	protected function replaceDefaults(array $parameters)
 	{
-		foreach ($parameters as $key => &$value) {
-			$value = isset($value) ? $value : Arr::get($this->defaults, $key);
+		foreach ($parameters as $key => $value) {
+			$parameters[$key] = isset($value) ? $value : Arr::get($this->defaults, $key);
 		}
 
 		foreach ($this->defaults as $key => $value) {
-			if (! isset($parameters[$key])) {
+			if (!isset($parameters[$key])) {
 				$parameters[$key] = $value;
 			}
 		}
@@ -713,10 +706,23 @@ class Route implements Contract, Matchable
 	 * @param  mixed  $handler
 	 * @return bool
 	 */
-	protected function handlerReferencesController($handler)
+	protected function isCallableClassMethod($handler)
 	{
-		// return Router::handlerReferencesController($handler);
-		return $this->isCallableClassMethod($handler, false);
+		return is_string($handler) && !is_callable($handler);
+	}
+
+	/**
+	 * Parse the given handler into a callable value.
+	 *
+	 * @param  mixed  $handler
+	 * @return mixed
+	 */
+	protected function parseHandler($handler)
+	{
+		if(!$this->isCallableClassMethod($handler))
+			return $handler;
+
+		return strpos($handler, '@') === false ? $handler."@dispatch" : $handler;
 	}
 
 

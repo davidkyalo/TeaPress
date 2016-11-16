@@ -10,6 +10,7 @@ return [
 		'TeaPress\Tests\Signals\Kernel',
 		'TeaPress\Tests\Database\Kernel',
 		'TeaPress\Tests\Routing\Kernel',
+		'TeaPress\Tests\Shortcode\Kernel',
 		'TeaPress\Tests\Core\Application\Kernel',
 
 	],

@@ -32,8 +32,15 @@ interface Route
 	 * @param  mixed  $value
 	 * @return static
 	 */
-	public function defaults($key, $value);
+	public function default($key, $value);
 
+	/**
+	 * Set an array of default values.
+	 *
+	 * @param  array  $defaults
+	 * @return static
+	 */
+	public function defaults(array $defaults);
 
 	/**
 	 * Get the route's HTTP verbs.

@@ -67,8 +67,8 @@ class Factory
 		],
 
 		'eager' => [
-			'teapress' 		=> 'TeaPress\Core\Bootstrap\LoadTeaPress',
 			'config' 		=> 'TeaPress\Core\Bootstrap\LoadConfiguration',
+			'teapress' 		=> 'TeaPress\Core\Bootstrap\LoadTeaPress',
 		],
 
 		'lazy' => [

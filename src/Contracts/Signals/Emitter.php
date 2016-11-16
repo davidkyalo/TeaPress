@@ -14,10 +14,10 @@ interface Emitter extends Online {
 	/**
 	*  Get the event's array name used for binding with the dispatcher.
 	*
-	* @param  string		$hook
+	* @param  string $event
 	*
-	* @return string|array
+	* @return string
 	*/
-	public static function getHookTag( $hook );
+	public static function getSignalTag( $event );
 
 }

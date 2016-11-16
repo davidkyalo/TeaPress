@@ -1,21 +1,22 @@
 <?php
 namespace TeaPress\Shortcode;
 
+use TeaPress\Utils\Str;
+use TeaPress\Utils\Bag;
+use InvalidArgumentException;
+use Illuminate\Http\Response;
 use TeaPress\Contracts\Core\Container;
-use TeaPress\Contracts\Utils\Actionable;
-use TeaPress\Utils\Traits\DependencyResolver;
+use TeaPress\Contracts\General\Actionable;
 use Illuminate\Http\Exception\HttpResponseException;
 use Symfony\Component\HttpFoundation\Response as SymfonyResponse;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 class Shortcode
 {
-	use DependencyResolver;
-
 	/**
 	 * @var string
 	 */
-	protected $id;
+	protected $tag;
 
 	/**
 	 * @var bool
@@ -37,11 +38,15 @@ class Shortcode
 	 */
 	protected $content;
 
-
-
-	public function __construct($id)
+	/**
+	 * Create the shortcode instance.
+	 *
+	 * @param  string $tag
+	 * @return void
+	 */
+	public function __construct($tag)
 	{
-		$this->id = $id;
+		$this->tag = $tag;
 	}
 
 	/**
@@ -92,43 +97,21 @@ class Shortcode
 	 */
 	public function attributes(array $attributes)
 	{
-		foreach ($attributes as $name => $value) {
-			$this->attribute($name, $value);
+		foreach ($attributes as $key => $value) {
+			$this->attribute($key, $value);
 		}
 
 		return $this;
 	}
 
 	/**
-	 * Invoke the shortcode's handler.
-	 * Executed by the do_shortcode() function.
-	 *
-	 * @param  array  $attributes
-	 * @param  string  $content
-	 * @return string
-	 */
-	public function __invoke($attributes = [], $content = null)
-	{
-		$this->mergeAttributes($attributes, $content);
-
-		$response = $this->run($content);
-
-		if($response instanceof SymfonyResponse){
-			$response->sendHeaders();
-			$response = $response->getContent();
-		}
-
-		return $response;
-	}
-
-	/**
-	 * Get the shortcode's ID.
+	 * Get the shortcode's tag.
 	 *
 	 * @return string
 	 */
-	public function getId()
+	public function getTag()
 	{
-		return $this->id;
+		return $this->tag;
 	}
 
 	/**
@@ -164,23 +147,31 @@ class Shortcode
 	}
 
 	/**
-	 * Run the route action and return the response.
+	 * Invoke the shortcode's handler.
+	 * Executed by the do_shortcode() function.
 	 *
-	 * @param  \TeaPress\Http\Request  $request
+	 * @param  array  $attributes
+	 * @param  string  $content
+	 * @return string
+	 */
+	public function __invoke($attributes = [], $content = null)
+	{
+		$this->mergeAttributes($attributes, $content);
+		return $this->getResponse($this->run())->getContent();
+	}
+
+	/**
+	 * Run the shortcode handler and return the response.
+	 *
 	 * @return mixed
 	 */
-	protected function run($content)
+	protected function run()
 	{
-		$this->container = $this->container ?: new Container;
-
 		try {
-
-			if( $this->isCallableClassMethod($this->handler) ){
-				return $this->runController($content);
+			if($this->isCallableWithAtSign($this->handler)){
+				return $this->runClassMethod($this->handler, $this->attributesWithoutNulls());
 			}
-
-			return $this->runCallable($content);
-
+			return $this->runCallable($this->handler, $this->attributesWithoutNulls());
 		} catch (HttpResponseException $e) {
 			return $e->getResponse();
 		}
@@ -188,75 +179,65 @@ class Shortcode
 
 
 	/**
-	 * Run the route action and return the response.
+	 * Run a callable handler.
 	 *
-	 * @param  \TeaPress\Http\Request  $request
+	 * @param  \Closure|array|string 	$handler
+	 * @param  array 					$parameters
+	 * @return mixed
 	 *
 	 * @throws \Symfony\Component\HttpKernel\Exception\NotFoundHttpException
-	 * @return mixed
 	 */
-	protected function runCallable($content)
+	protected function runCallable($handler, $parameters = [])
 	{
-		if(is_array($this->handler))
-			$parameters = $this->resolveClassMethodDependencies(
-					$this->attributesWithoutNulls(), $this->handler[0], $this->handler[1]
-				);
-		else
-			$parameters = $this->resolveMethodDependencies(
-					$this->attributesWithoutNulls(), new ReflectionFunction($this->handler)
-				);
-
-		if (is_array($this->handler) && !method_exists($this->handler[0], $this->handler[1]) ) {
+		if(!is_callable($handler)){
 			throw new NotFoundHttpException;
 		}
 
-		return call_user_func_array($this->handler, $parameters);
+		return $this->container->call($handler, $parameters);
 	}
 
 	/**
-	 * Run the route action and return the response.
+	 * Run handler which is in the Class@method syntax.
 	 *
-	 * @param  \TeaPress\Http\Request  $request
+	 * @param  string $handler
+	 * @param  array $parameters
 	 * @return mixed
 	 *
+	 * @throws \InvalidArgumentException
 	 * @throws \Symfony\Component\HttpKernel\Exception\NotFoundHttpException
 	 */
-	protected function runController($content)
+	protected function runClassMethod($handler, $parameters = [])
 	{
-		list($class, $method) = explode('@', $this->handler);
+		list($class, $method) = array_pad(explode('@', $handler), 2, null);
 
-		$parameters = $this->resolveClassMethodDependencies(
-				$this->attributesWithoutNulls(), $class, $method
-			);
+		if (is_null($method)){
+			$msg = "Shortcode \"". $this->tag ."\". Method for handler \"{$handler}\" not provided";
+			throw new InvalidArgumentException($msg);
+		}
 
 		$instance = $this->container->make($class);
 
+		$parameters = Bag::create($parameters);
+
+		if($instance instanceof Actionable){
+			$method = $instance->beforeAction($method, $parameters) ?: $method;
+		}
+
 		if (!method_exists($instance, $method)) {
 			if($instance instanceof Actionable)
-				return $instance->missingAction($content, $method, $parameters);
+				return $instance->missingAction($method, $parameters);
 			else
 				throw new NotFoundHttpException;
 		}
 
-		if($instance instanceof Actionable){
-			$newParameters = $instance->beforeAction($content, $method, $parameters);
-			if(!is_null($newParameters)){
-				$parameters = $newParameters;
-			}
-		}
-
-		$response = call_user_func_array([$instance, $method], $parameters);
+		$response = $this->runCallable([$instance, $method], $parameters->all());
 
 		if($instance instanceof Actionable){
-			$newResponse = $instance->afterAction($response, $content, $method, $parameters);
-			if(!is_null($newResponse)){
-				$response = $newResponse;
-			}
+			$response = $instance->afterAction($response, $method, $parameters);
 		}
 
 		return $response;
 	}
-
 
 	/**
 	 * Parse the appropriate for the given attribute.
@@ -278,15 +259,12 @@ class Shortcode
 	protected function mergeAttributes($attributes, $content)
 	{
 		$this->parseDefaultAttributes();
-
 		$attributes = $attributes ? (array) $attributes : [];
 		$attributes['content'] = $content;
-
 		foreach ($attributes as $key => $value) {
 			$key = $this->attrName($key);
 			$this->attributes[$key] = isset($value) ? $value : Arr::get($this->attributes, $key);
 		}
-
 		return $this->attributes;
 	}
 
@@ -298,13 +276,60 @@ class Shortcode
 	protected function parseDefaultAttributes()
 	{
 		$results = [];
-
 		foreach ($this->attributes as $key => $value) {
 			$results[$this->attrName($key)] = $value;
 		}
-
 		return $this->attributes = $results;
 	}
+
+
+	/**
+	 * Determine if the given string is in Class@method syntax.
+	 *
+	 * @param  mixed  $callback
+	 * @return bool
+	 */
+	protected function isCallableWithAtSign($callback)
+	{
+		return is_string($callback) ? (strpos($callback, '@') !== false) : false;
+	}
+
+
+
+	/**
+	 * Set the IOC container instance.
+	 *
+	 * @param \TeaPress\Contracts\Core\Container $container
+	 * @return static
+	 */
+	public function setContainer(Container $container)
+	{
+		$this->container = $container;
+
+		return $this;
+	}
+
+
+	/**
+	 * Get/Create a response instance from the given value.
+	 * If the given value is already a valid response instance,
+	 * it is returned as it is.
+	 *
+	 * @param  mixed  $response
+	 * @param  bool  $force
+	 * @return \Symfony\Component\HttpFoundation\Response
+	 */
+	protected function getResponse($response)
+	{
+		if($response instanceof SymfonyResponse)
+			return $response;
+
+		if ($response instanceof PsrResponseInterface)
+			return (new HttpFoundationFactory)->createResponse($response);
+
+		return new Response($response);
+	}
+
 
 
 }

@@ -25,8 +25,6 @@ abstract class ServiceTestCase extends TestCase
 	public function __construct(...$args)
 	{
 		parent::__construct(...$args);
-
-		$this->container = $this->getContainer();
 	}
 
 
@@ -62,12 +60,7 @@ abstract class ServiceTestCase extends TestCase
 
 	protected function makeTheService($parameters = [])
 	{
-		return $this->app($this->getServiceName(), $parameters);
-	}
-
-	protected function getContainer()
-	{
-		return $this->app();
+		return $this->container($this->getServiceName(), $parameters);
 	}
 
 	protected function getMakeServiceParameters()
@@ -86,13 +79,13 @@ abstract class ServiceTestCase extends TestCase
 	protected function runServiceAliasesTest(array $aliases = null)
 	{
 		if(is_null($aliases))
-			$this->app()->serviceAliases( $this->getServiceName() );
+			$this->container()->serviceAliases( $this->getServiceName() );
 
 		$expected = array_pad( [], count( (array) $aliases), get_class( $this->getService() ));
 		$results = [];
 
 		foreach ((array) $aliases as $alias) {
-			$service = $this->app->make($alias);
+			$service = $this->container()->make($alias);
 			$results[] = is_object($service) ? get_class($service) : $service;
 		}
 
@@ -105,7 +98,7 @@ abstract class ServiceTestCase extends TestCase
 			return $this->getService();
 
 		if($key === 'contaner')
-			return $this->getContainer();
+			return $this->container();
 
 		throw new OutOfBoundsException("Property {$key} not defined");
 

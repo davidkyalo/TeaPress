@@ -1,44 +1,94 @@
 <?php
 namespace TeaPress\Signals;
 
+use TeaPress\Contracts\Core\Container;
 
 class Handler
 {
+	/**
+	 * @var \TeaPress\Contracts\Core\Container
+	 */
+	protected $container;
 
-	protected $id;
-
-	protected $hub;
-
+	/**
+	 * @var mixed
+	 */
 	protected $callback;
 
-	protected $priority;
-
-	public function __construct($callback, $priority, Hub $hub)
+	/**
+	 * Create the handle instance.
+	 *
+	 * @param  \TeaPress\Contracts\Core\Container  $container
+	 * @param  mixed  $callback
+	 * @return void
+	*/
+	public function __construct(Container $container, $callback)
 	{
-		// $this->id = $id;
-		$this->hub = $hub;
+		$this->container = $container;
 		$this->callback = $callback;
-		$this->priority = $priority;
 	}
 
-	public function __invoke()
+	/**
+	 * Execute the handler's callback.
+	 *
+	 * @param  mixed  ...$parameters
+	 * @return mixed
+	*/
+	public function __invoke(...$parameters)
 	{
-		return $this->hub->invokeCallback($this->callback, func_get_args(), $this->priority);
+		return call_user_func_array($this->getCallable($this->callback), $parameters);
 	}
 
-	public function getId()
-	{
-		return $this->id;
-	}
-
+	/**
+	 * Get the handler's callback.
+	 *
+	 * @return mixed
+	*/
 	public function getCallback()
 	{
 		return $this->callback;
 	}
 
-	public function getPriority()
+	/**
+	 * Creates the class based callable for callback if callback is not callable, Returns callback if callable.
+	 *
+	 * @param  callable|string  $callback
+	 *`
+	 * @return callable
+	 */
+	protected function getCallable($callback)
 	{
-		return $this->priority;
+		if(is_callable($callback)){
+			return $callback;
+		}
+
+		if(!is_string($callback)){
+			throw new InvalidArgumentException("Invalid event callback.");
+		}
+		return $this->parseClassCallable($callback);
 	}
 
+	/**
+	 * Parse the class based callback into class and method.
+	 *
+	 * @param  string  $callback
+	 * @return array|callable
+	 */
+	protected function parseClassCallable($callback)
+	{
+		if(strpos($callback, '@') === 0){
+			return $this->container->make( substr($callback, 1) );
+		}
+
+		$segments = explode('@', $callback);
+
+		if(!count($segments)){
+			throw new InvalidArgumentException("Invalid event callback [$callback]");
+		}
+
+		$object = $this->container->make($segments[0]);
+		$method = count($segments) === 2 ? $segments[1] : 'handle';
+
+		return [$object, $method];
+	}
 }

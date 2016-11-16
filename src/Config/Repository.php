@@ -5,6 +5,7 @@ namespace TeaPress\Config;
 use ArrayIterator;
 use IteratorAggregate;
 use TeaPress\Utils\Arr;
+use TeaPress\Utils\Str;
 use TeaPress\Contracts\Utils\Arrayable;
 use TeaPress\Contracts\Config\Filterable;
 use TeaPress\Contracts\Utils\ArrayBehavior;
@@ -16,7 +17,7 @@ class Repository implements Contract, Filterable, ArrayBehavior, Arrayable, Iter
 	/**
 	 * The Signals Hub
 	 *
-	 * @var \TeaPress\Contracts\Signals\Hub
+	 * @var \TeaPress\Contracts\Signals\Signals
 	 */
 	protected $signals;
 
@@ -28,11 +29,11 @@ class Repository implements Contract, Filterable, ArrayBehavior, Arrayable, Iter
 	protected $namespace;
 
 	/**
-	 * The unique identifire for this repository's filters.
+	 * The unique identifier for this repository's filter events.
 	 *
 	 * @var string
 	 */
-	protected $signalsDomain;
+	protected $signalsNamespace;
 
 	/**
 	 * All of the configuration items.
@@ -42,20 +43,28 @@ class Repository implements Contract, Filterable, ArrayBehavior, Arrayable, Iter
 	protected $items = [];
 
 	/**
-	 * All of the configuration items.
+	 * Registered filters
 	 *
 	 * @var array
 	 */
-	protected $filtered = [];
+	protected $filters = [];
+
+	/**
+	 * Registered filters
+	 *
+	 * @var array
+	 */
+	protected $wildcardFilters = [];
 
 	/**
 	 * Create a new configuration repository.
 	 *
-	 * @param  string  $namespace
 	 * @param  array  $items
+	 * @param  string $namespace
+	 * @param  string $signalsNamespace
 	 * @return void
 	 */
-	public function __construct(array $items = [], $namespace = null)
+	public function __construct($namespace, array $items = [])
 	{
 		$this->items = $items;
 		$this->namespace = $namespace;
@@ -64,7 +73,7 @@ class Repository implements Contract, Filterable, ArrayBehavior, Arrayable, Iter
 	protected function filterValue($key, $value)
 	{
 		if($this->signals){
-			$value = $this->signals->applyFilters($this->getFilterTag($key), $value, $this);
+			$value = $this->signals->filter($this->getFilterTag($key), $value, [$key, $this]);
 		}
 		return $value;
 	}
@@ -80,16 +89,23 @@ class Repository implements Contract, Filterable, ArrayBehavior, Arrayable, Iter
 	*/
 	public function filter($key, $callback, $priority = null, $force =false)
 	{
-		if($this->signals){
-			$tag = $this->getFilterTag($key);
-			$this->signals->addFilter($tag, $callback, $priority);
-			$this->filtered[$key] = true;
-		}
+		if(!$this->signals)
+			return;
+
+		$tag = $this->getFilterTag($key);
+		$this->signals->addFilter($tag, $callback, $priority);
+
+		if(Str::contains($key, '*'))
+			$this->wildcardFilters[$key] = true;
+		else
+			$this->filters[$key] = true;
+
 		return true;
 	}
 
 	/**
-	* Determine if the given key has filters. If a key is not specified, returns an array of filtered keys
+	* Determine if the given key has filters.
+	* If a key is not specified, returns an array of filtered keys
 	*
 	* @param  string|null  $key
 	*
@@ -98,38 +114,22 @@ class Repository implements Contract, Filterable, ArrayBehavior, Arrayable, Iter
 	public function filtered($key=null)
 	{
 		if(is_null($key))
-			return $this->filtered;
+			return $this->filters;
 
-		return isset($this->filtered[$key]); //&& $this->filtered[$key];
+		return isset($this->filters[$key]);
 	}
 
 	/**
-	 * Get the specified configuration value.
+	 * Get the filter event tag for the given configuration key.
 	 *
 	 * @param  string 	$key
 	 *
-	 * @return string|array
+	 * @return string
 	 */
 	public function getFilterTag($key)
 	{
-		$domain = $this->getSignalsDomain();
-
-		if($domain && $domain[0] !== '@')
-			$domain = '@'.$domain;
-
-		return [$this->getSignalsNamespace(), $key.$domain];
+		return $this->getSignalsNamespace().':'.$key;
 	}
-
-	/**
-	* Get this emitter's events namespace.
-	*
-	* @return string|null
-	*/
-	protected function getSignalsNamespace()
-	{
-		return Contract::class;
-	}
-
 
 	/**
 	 * Determine if the given configuration value exists.
@@ -304,8 +304,6 @@ class Repository implements Contract, Filterable, ArrayBehavior, Arrayable, Iter
 		$this->namespace = $namespace;
 	}
 
-
-
 	/**
 	 * Get the signals hub instance.
 	 *
@@ -328,29 +326,30 @@ class Repository implements Contract, Filterable, ArrayBehavior, Arrayable, Iter
 		$this->signals = $signals;
 	}
 
-
 	/**
-	* Get the signals domain.
+	* Get this repository's events namespace.
 	*
 	* @return string|null
 	*/
-	protected function getSignalsDomain()
+	public function getSignalsNamespace()
 	{
-		return $this->signalsDomain ?: ($this->namespace == '*' ? '': $this->namespace );
+		if(is_null($this->signalsNamespace)){
+			return 'config.'.$this->getNamespace();
+		}
+
+		return $this->signalsNamespace;
 	}
 
 	/**
-	 * Set the signals domain.
-	 *
-	 * @param  string  $domain
-	 *
-	 * @return void
-	 */
-	public function setSignalsDomain($domain)
+	* Set this repository's events namespace.
+	*
+	* @param  string  $namespace
+	* @return void
+	*/
+	public function setSignalsNamespace($namespace)
 	{
-		$this->signalsDomain = $domain;
+		return $this->signalsNamespace = $namespace;
 	}
-
 
 	/**
 	 * Get the number of configuration items.

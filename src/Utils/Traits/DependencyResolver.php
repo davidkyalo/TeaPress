@@ -57,7 +57,7 @@ trait DependencyResolver
 	 * @param  \ReflectionFunctionAbstract  $reflector
 	 * @return array
 	 */
-	public function resolveMethodDependencies(array $parameters, ReflectionFunctionAbstract $reflector)
+	public function _resolveMethodDependencies(array $parameters, ReflectionFunctionAbstract $reflector)
 	{
 		$originalParameters = $parameters;
 
@@ -72,6 +72,90 @@ trait DependencyResolver
 		}
 
 		return $parameters;
+	}
+
+
+	/**
+	 * Resolve the given method's type-hinted dependencies.
+	 *
+	 * @param  array  $parameters
+	 * @param  \ReflectionFunctionAbstract  $reflector
+	 * @return array
+	 */
+	public function resolveMethodDependencies(array $parameters, ReflectionFunctionAbstract $reflector)
+	{
+		$originalParameters = $parameters;
+
+		$ordered = [];
+
+		foreach ($reflector->getParameters() as $key => $parameter) {
+			$name = $parameter->getName();
+			if($parameter->hasType()){
+				$value = $this->transformDependency($parameter, $parameters, $originalParameters);
+			}
+			else{
+				// $value =
+			}
+
+			$instance = $this->transformDependency(
+				$parameter, $parameters, $originalParameters
+			);
+
+			// $ordered = !is_null($instance) ?
+
+			if (! is_null($instance)) {
+				$this->spliceIntoParameters($parameters, $key, $instance);
+			}
+
+			// $ordered =
+		}
+
+		return $parameters;
+	}
+
+	/**
+	 * Attempt to transform the given parameter into a class instance.
+	 *
+	 * @param  \ReflectionParameter  $parameter
+	 * @param  array  $defaults
+	 * @return mixed
+	 */
+	protected function resolveParameterValue(ReflectionParameter $parameter, array $defaults = [])
+	{
+		$key = Arr::isAssoc($defaults) ? $parameter->getName() : $parameter->getPosition();
+
+		$value = $parameter->hasType() ? $this->transformDependency($parameter, $defaults) : Arr::get($defaults, $key);
+	}
+
+	/**
+	 * Attempt to transform the given parameter into a class instance.
+	 *
+	 * @param  \ReflectionParameter $parameter
+	 * @param  string|int  			$key
+	 * @param  array  				$defaults
+	 * @return mixed
+	 */
+	protected function resolveDependency(ReflectionParameter $parameter, $key, array $defaults = [])
+	{
+		$class = $parameter->getClass();
+
+		$instance = Arr::get($defaults, $key);
+
+		if(!$class)
+			return $instance;
+
+		if($instance instanceof $class->name)
+			return $instance;
+
+		if($this->container->bound($class->name))
+			return $this->container->make($class->name);
+
+		// If the parameter has a type-hinted class, we will check to see if it is already in
+		// the list of parameters. If it is we will just skip it as it is probably a model
+		// binding and we do not want to mess with those; otherwise, we resolve it here.
+		if ($class && ! $this->alreadyInParameters($class->name, $parameters)) {
+
+		}
 	}
 
 	/**
@@ -158,16 +242,14 @@ trait DependencyResolver
 	 * Determine if the given callback references a class method with using the '@' sign.
 	 *
 	 * @param  mixed  $callback
-	 * @param  bool   $withAtSign
+	 * @param  bool   $checkAtSign
 	 * @return bool
 	 */
-	protected function isCallableClassMethod($callback, $withAtSign = true)
+	protected function isCallableClassMethod($callback, $checkAtSign = true)
 	{
-		if($withAtSign){
-			return $this->isCallableWithAtSign($callback);
-		}
-
-		return is_string($callback) && !is_callable($callback);
+		return $checkAtSign
+			? $this->isCallableWithAtSign($callback)
+			: (is_string($callback) && !is_callable($callback));
 	}
 
 	/**
@@ -178,11 +260,7 @@ trait DependencyResolver
 	 */
 	protected function isCallableWithAtSign($callback)
 	{
-		if (! is_string($callback)) {
-			return false;
-		}
-
-		return strpos($callback, '@') !== false;
+		return is_string($callback) ? (strpos($callback, '@') !== false) : false;
 	}
 
 

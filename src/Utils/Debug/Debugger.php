@@ -3,7 +3,9 @@ namespace TeaPress\Utils\Debug;
 
 use Symfony\Component\Debug\Debug;
 
-class Debugger {
+class Debugger
+{
+	protected static $instance;
 
 	protected $debug;
 	protected $display_errors;
@@ -17,7 +19,8 @@ class Debugger {
 		$this->level = $level;
 	}
 
-	public function start(){
+	public function start()
+	{
 		if($this->started)
 			return true;
 
@@ -26,5 +29,10 @@ class Debugger {
 
 		Debug::enable( $this->level , $this->display_errors);
 		return $this->started = true;
+	}
+
+	public static getInstance($debug = null, $display_errors = false, $level = E_ALL)
+	{
+
 	}
 }
